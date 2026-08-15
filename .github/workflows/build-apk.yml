@@ -1,0 +1,64 @@
+name: Build Release APK
+
+on:
+  # 允许在 GitHub 网页上手动点一下就出包
+  workflow_dispatch:
+  # 推送到 main/master 自动出包
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses || true
+
+      # 仓库只提交 Dart 源码。原生工程一律由 flutter create 生成，
+      # 保证 gradle wrapper / build.gradle / flutterEmbedding v2 等全部正确。
+      # 必须显式指定 --project-name：CI 上目录名是仓库名，带连字符会让 Dart 包名非法。
+      - name: Generate native Android project
+        run: |
+          rm -rf android
+          flutter create --platforms=android --project-name detect_app --org com.zdjc .
+
+      # 把 WiFi/蓝牙权限、中文应用名、minSdk 补回生成出来的原生工程
+      - name: Patch Android manifest & gradle
+        run: python3 ci/patch_android.py
+
+      - name: Show patched manifest
+        run: cat android/app/src/main/AndroidManifest.xml
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Show APK info
+        run: ls -lh build/app/outputs/flutter-apk/
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: detect-app-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30

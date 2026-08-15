@@ -1,0 +1,25 @@
+name: detect_app
+description: 智能终端检测定位系统（真实 WiFi / 蓝牙扫描）
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # 真实蓝牙低功耗扫描
+  flutter_blue_plus: '>=1.32.0 <2.0.0'
+  # 真实 WiFi 扫描（getScanResults）
+  wifi_scan: ^0.4.1
+  # 运行时权限（位置 / 蓝牙）
+  permission_handler: '>=11.0.0 <13.0.0'
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: '>=3.0.0 <7.0.0'
+
+flutter:
+  uses-material-design: true

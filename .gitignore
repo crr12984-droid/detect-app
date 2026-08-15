@@ -1,0 +1,39 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.dart_tool/
+.idea/
+.vscode/
+*.iml
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Android: 原生工程一律由 CI / 本机脚本用 flutter create 生成，不入库。
+# 提交进来会让 flutter create 跳过生成，导致缺 flutterEmbedding v2 而崩溃。
+/android/
+android/.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/app/*.jks
+android/app/*.keystore
+android/local.properties
+android/**/gradle-wrapper.jar
+
+# Build artifacts
+build/
+*.apk
+*.aab
+
+# IntelliJ
+*.ipr
+*.iws
+
+# Keystore / secrets
+**/*.keystore
+**/*.jks
