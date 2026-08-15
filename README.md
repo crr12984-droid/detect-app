@@ -116,3 +116,4 @@ detect_app/
 - WiFi RTT（`WifiRttManager`）在支持设备上做更精准测距。
 - 品牌 OUI 库扩充为权威 IEEE OUI 数据库（当前为示例集合，需按真实 OUI 校准）。
 - 报告导出（PDF/Excel）、云端同步（见 `APK开发规划清单.md` M2/M3）。
+"# detect-app" 
