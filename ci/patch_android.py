@@ -72,14 +72,11 @@ def patch_manifest() -> bool:
         print("[ok] 应用名 -> 智能终端检测定位")
         s = s2
 
-    # 3) 平板/手机横竖屏自适应：configChanges 里补上 screenLayout 等
-    if "screenLayout" not in s:
-        s = s.replace(
-            'android:configChanges="orientation|keyboardHidden|keyboard|screenSize|'
-            'smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"',
-            'android:configChanges="orientation|keyboardHidden|keyboard|screenSize|'
-            'smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"',
-        )
+    # 3) 自检：清单必须由 flutter create 生成，缺 flutterEmbedding v2 会直接崩溃
+    if "flutterEmbedding" not in s:
+        print("[FAIL] 清单缺少 flutterEmbedding，说明它不是 flutter create 生成的。")
+        print("       请先删除 android/ 目录再执行 flutter create --platforms=android .")
+        return False
 
     p.write_text(s, encoding="utf-8")
     return True
@@ -92,6 +89,9 @@ def patch_min_sdk() -> bool:
 
     if kts.exists():
         s = kts.read_text(encoding="utf-8")
+        if re.search(r"minSdk\s*=\s*23\b", s):
+            print("[skip] build.gradle.kts minSdk 已是 23")
+            return True
         new = re.sub(r"minSdk\s*=\s*[\w.().]+", "minSdk = 23", s, count=1)
         if new != s:
             kts.write_text(new, encoding="utf-8")
@@ -102,6 +102,9 @@ def patch_min_sdk() -> bool:
 
     if groovy.exists():
         s = groovy.read_text(encoding="utf-8")
+        if re.search(r"minSdk(Version)?\s+23\b", s):
+            print("[skip] build.gradle minSdk 已是 23")
+            return True
         new = re.sub(r"minSdkVersion\s+[\w.().]+", "minSdkVersion 23", s, count=1)
         if new == s:
             new = re.sub(r"minSdk\s+[\w.().]+", "minSdk 23", s, count=1)
