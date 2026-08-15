@@ -33,11 +33,13 @@ adb devices            # 连上真机后能看到设备序列号
 # 1. 进入工程
 cd detect_app
 
-# 2. 让 Flutter 生成与当前版本匹配的原生安卓脚手架（android/ 等）
-flutter create --platforms=android .
+# 2. 生成与当前 Flutter 版本匹配的原生安卓工程
+#    注意：android/ 目录不入库，必须现场生成。
+#    --project-name 必须显式指定：文件夹名若含连字符，Dart 包名非法会直接失败。
+flutter create --platforms=android --project-name detect_app --org com.zdjc .
 
-# 3. 用本工程提供的清单（含 WiFi/蓝牙权限）覆盖自动生成的清单
-#    （文件已备好：android/app/src/main/AndroidManifest.xml）
+# 3. 把 WiFi/蓝牙权限、中文应用名、minSdk 23 补进刚生成的工程
+python ci/patch_android.py
 
 # 4. 拉取依赖
 flutter pub get
@@ -50,8 +52,12 @@ flutter build apk --release --split-per-abi
 ```
 
 产物位于：
-`build/app/outputs/flutter-apk/app-arme64-v8a-release.apk`（主流手机/平板）
+`build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`（主流手机/平板）
 `build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk`（老旧 32 位设备）
+
+> 为什么清单不直接入库：`flutter create` 遇到已存在的 `AndroidManifest.xml` 会跳过生成，
+> 导致缺少 Flutter 必需的 `flutterEmbedding=2`，装到设备上会直接崩溃。
+> 因此清单一律由 `flutter create` 生成，再由 `ci/patch_android.py` 打补丁（该脚本幂等、可重复执行）。
 
 拷贝到设备双击安装，或用 `adb install <apk>`。
 
@@ -88,8 +94,9 @@ flutter build apk --release --split-per-abi
 ## 四、工程结构
 ```
 detect_app/
-├── pubspec.yaml                     # 依赖：flutter_blue_plus / wifi_scan / permission_handler / sensors_plus
-├── android/app/src/main/AndroidManifest.xml   # 权限 + 启动 Activity
+├── pubspec.yaml                     # 依赖：flutter_blue_plus / wifi_scan / permission_handler
+├── ci/patch_android.py              # 生成原生工程后注入权限/应用名/minSdk（CI 与本机共用）
+├── .github/workflows/build-apk.yml  # 云端出包（推送即自动构建 APK）
 ├── lib/
 │   ├── main.dart
 │   ├── models/device.dart           # 设备模型（含 RSSI→距离/格数）
@@ -105,7 +112,7 @@ detect_app/
 ```
 
 ## 五、后续可扩展（真实能力加深）
-- `sensors_plus` 接陀螺仪/罗盘，做方位+信号融合定位（原型的定位环逻辑可迁移至此）。
+- 加 `sensors_plus` 接陀螺仪/罗盘，做方位+信号融合定位（原型的定位环逻辑可迁移至此，当前未引入以减少构建依赖）。
 - WiFi RTT（`WifiRttManager`）在支持设备上做更精准测距。
 - 品牌 OUI 库扩充为权威 IEEE OUI 数据库（当前为示例集合，需按真实 OUI 校准）。
 - 报告导出（PDF/Excel）、云端同步（见 `APK开发规划清单.md` M2/M3）。

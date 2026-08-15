@@ -17,8 +17,34 @@ APK 必须由 Android SDK + Flutter 编译并签名后生成。下面两条路�
 4. 跑完后到 **Actions → 该次运行 → Artifacts** 下载 `detect-app-release-apk`，里面就是 `app-release.apk`。
 5. 把 APK 拷到手机/平板（或 `adb install app-release.apk`）即可安装。
 
-> 该工作流已配好：Ubuntu + Java17 + Flutter stable + Android SDK(platform-34/build-tools 34.0.0) + `flutter build apk --release`，产物自动上传为 Artifact。
+> 该工作流已配好：Ubuntu + Java17 + Flutter stable + Android SDK → `flutter create` 生成原生工程 →
+> `ci/patch_android.py` 注入 WiFi/蓝牙权限 → `flutter build apk --release`，产物自动上传为 Artifact。
 > 若要上架或对外发布，需自建正式签名 keystore（见下方"正式签名"）。
+
+### A-1 更新已有仓库（替换文件 + 提交）
+
+当本地源码有修改（例如修完 CI 报错）要同步到 GitHub 重新触发出包时：
+
+```bash
+cd detect_app
+git add -A
+git commit -m "fix: 说明本次改动"
+git push
+```
+
+若本地是**新初始化的仓库**、而 GitHub 上已有一次旧提交（历史不同源），push 会被拒绝。
+此时用强制推送覆盖远端（远端只是旧代码，可安全覆盖）：
+
+```bash
+git remote add origin https://github.com/<你的用户名>/<仓库名>.git   # 首次才需要
+git push -u origin main --force
+```
+
+> 首次推送会弹出 GitHub 登录（Git for Windows 自带凭据管理器，浏览器授权即可）；
+> 若用命令行密码方式，需改用 Personal Access Token（GitHub 已不支持账号密码推送）。
+
+**不想用命令行？** 也可在 GitHub 网页直接改：进仓库 → 点开要替换的文件 → 铅笔图标 → 全选粘贴新内容 →
+底部 `Commit changes`。提交后 Actions 会自动重跑。删除文件同理（文件页 → 垃圾桶图标）。
 
 ---
 
