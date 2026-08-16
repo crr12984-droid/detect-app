@@ -7,6 +7,7 @@ import '../models/device.dart';
 import '../models/report.dart';
 import '../core/wifi_scanner.dart';
 import '../core/ble_scanner.dart';
+import '../core/device_classifier.dart';
 
 /// 全局应用状态：导航、扫描、定位、报告、设置。
 /// 由 AppShell 持有并注入各界面；任何变更调用 notify() 触发重建。
@@ -33,6 +34,9 @@ class AppState {
   bool scanning = false;
   Timer? _scanTimer;
   Timer? _bannerTimer;
+  final BleScanner _ble = BleScanner(); // 缓存 BluetoothDevice，供连接读型号
+  final Set<String> _modelTried = {}; // 已尝试读型号的 MAC，避免重复连接
+  bool _resolving = false;
 
   // 定位
   Device? tracked;
@@ -163,11 +167,11 @@ class AppState {
   StreamSubscription? _bleSub;
   Future<void> _bleLoop() async {
     if (!scanning || detType != DeviceKind.ble) return;
-    if (!(await BleScanner().supported)) return;
+    if (!(await _ble.supported)) return;
     _bleSub?.cancel();
     _bleSub = FlutterBluePlus.scanResults.listen((list) {
       if (!scanning || detType != DeviceKind.ble) return;
-      ble = list;
+      ble = _ble.mapResults(list);
       notify();
     });
     while (scanning && detType == DeviceKind.ble) {
@@ -181,6 +185,8 @@ class AppState {
             .where((s) => !s)
             .first
             .timeout(_bleTimeout() + const Duration(seconds: 1));
+        // 扫描停止间隙尝试连接读取精确型号（避免与扫描冲突）
+        await _maybeResolveModels();
         await Future.delayed(const Duration(milliseconds: 200));
       } catch (_) {
         await Future.delayed(const Duration(seconds: 1));
@@ -255,6 +261,55 @@ class AppState {
           SystemSound.play(SystemSoundType.click);
         } catch (_) {}
       });
+    }
+  }
+
+  // ---------- 精确型号（连接后读 GATT 设备信息服务 0x180A） ----------
+  Future<void> _maybeResolveModels() async {
+    if (_resolving) return;
+    for (final d in ble) {
+      if (d.model == null &&
+          !_modelTried.contains(d.id) &&
+          (d.brand == 'Apple' || d.brand == '未知')) {
+        _modelTried.add(d.id);
+        _resolving = true;
+        try {
+          await resolveModel(d);
+        } catch (_) {}
+        _resolving = false;
+        return; // 每次扫描间隙只尝试一台，避免拖慢刷新
+      }
+    }
+  }
+
+  Future<void> resolveModel(Device d) async {
+    if (d.kind != DeviceKind.ble || d.model != null) return;
+    final bd = _ble.deviceFor(d.id);
+    if (bd == null) return;
+    try {
+      await bd.connect(timeout: const Duration(seconds: 4));
+      final services = await bd.discoverServices();
+      String? model;
+      for (final s in services) {
+        if (!s.uuid.str.toUpperCase().contains('180A')) continue;
+        for (final c in s.characteristics) {
+          if (c.uuid.str.toUpperCase().contains('2A24')) {
+            model = String.fromCharCodes(await c.read()).trim();
+            break;
+          }
+        }
+      }
+      await bd.disconnect();
+      if (model != null && model.isNotEmpty) {
+        final pretty = appleMarketingName(model);
+        final i = ble.indexWhere((x) => x.id == d.id);
+        if (i >= 0) {
+          ble[i] = ble[i].copyWith(model: pretty);
+          notify();
+        }
+      }
+    } catch (_) {
+      // 未配对/连接失败：保持类别识别结果
     }
   }
 

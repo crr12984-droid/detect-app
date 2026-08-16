@@ -306,9 +306,15 @@ class DetectionPage extends StatelessWidget {
       BrandLogo(d.brand, size: 14),
       const SizedBox(width: 7),
       Expanded(
-        child: Text(brandLabel(d.brand),
-            style: const TextStyle(fontSize: 13),
-            overflow: TextOverflow.ellipsis),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(brandLabel(d.brand),
+              style: const TextStyle(fontSize: 13),
+              overflow: TextOverflow.ellipsis),
+          if (d.model != null)
+            Text(d.model!,
+                style: const TextStyle(fontSize: 11, color: AppColors.txt2),
+                overflow: TextOverflow.ellipsis),
+        ]),
       ),
     ]);
     final typeCell = d.wifiType == null

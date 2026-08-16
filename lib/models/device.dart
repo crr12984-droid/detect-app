@@ -24,6 +24,7 @@ class Device {
   final String? info; // WiFi: 加密方式；BLE: 可选
   final String category; // 路由器 / 手机 / 手表 / 耳机 / 平板 / 车载 / ''未知
   bool seized; // 是否被查扣
+  final String? model; // 精确型号（名称带出或连接后读 DIS 获得）
   final WifiType? wifiType; // 仅 WiFi：AP / STA / Direct
   final List<StaLink> linkedSta; // 仅 WiFi AP：下挂关联终端
   final DateTime firstSeen;
@@ -40,6 +41,7 @@ class Device {
     this.info,
     this.category = '',
     this.seized = false,
+    this.model,
     this.wifiType,
     this.linkedSta = const [],
     DateTime? firstSeen,
@@ -59,6 +61,7 @@ class Device {
           int? seen,
           bool? seized,
           String? name,
+          String? model,
           WifiType? wifiType,
           List<StaLink>? linkedSta}) =>
       Device(
@@ -71,6 +74,7 @@ class Device {
         info: info,
         category: category,
         seized: seized ?? this.seized,
+        model: model ?? this.model,
         wifiType: wifiType ?? this.wifiType,
         linkedSta: linkedSta ?? this.linkedSta,
         firstSeen: firstSeen,
