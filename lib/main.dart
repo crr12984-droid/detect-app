@@ -1,27 +1,38 @@
 import 'package:flutter/material.dart';
-import 'features/detection/detection_page.dart';
+import 'app/app_state.dart';
+import 'app/app_shell.dart';
+import 'core/theme.dart';
 
-void main() {
-  runApp(const DetectApp());
+void main() => runApp(const DetectApp());
+
+/// 应用根：持有全局 AppState，onChanged 触发重建（无需登录，直达主界面）。
+class DetectApp extends StatefulWidget {
+  const DetectApp({super.key});
+  @override
+  State<DetectApp> createState() => _DetectAppState();
 }
 
-class DetectApp extends StatelessWidget {
-  const DetectApp({super.key});
+class _DetectAppState extends State<DetectApp> {
+  late final AppState _state;
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: '智能终端检测定位',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primaryColor: const Color(0xFF22B8CF),
-        scaffoldBackgroundColor: const Color(0xFF0A0F14),
-        useMaterial3: true,
-        cardColor: const Color(0xFF121A22),
-        dividerColor: const Color(0xFF1E2A36),
-      ),
-      home: const DetectionPage(),
-    );
+  void initState() {
+    super.initState();
+    _state = AppState();
+    _state.onChanged = () => setState(() {});
   }
+
+  @override
+  void dispose() {
+    _state.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+        title: '智能终端检测定位',
+        debugShowCheckedModeBanner: false,
+        theme: buildAppTheme(),
+        home: AppShell(state: _state),
+      );
 }

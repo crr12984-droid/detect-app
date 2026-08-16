@@ -1,170 +1,353 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import '../../app/app_state.dart';
+import '../../core/theme.dart';
+import '../../core/ui_assets.dart';
 import '../../models/device.dart';
-import '../../core/wifi_scanner.dart';
-import '../../core/ble_scanner.dart';
-import '../../core/permissions.dart';
-import '../positioning/positioning_page.dart';
+import '../common/widgets.dart';
 
-class DetectionPage extends StatefulWidget {
-  const DetectionPage({super.key});
-  @override
-  State<DetectionPage> createState() => _DetectionPageState();
-}
-
-class _DetectionPageState extends State<DetectionPage>
-    with SingleTickerProviderStateMixin {
-  late TabController _tab;
-  List<Device> _wifi = [];
-  List<Device> _ble = [];
-  bool _scanning = false;
-  String _err = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _tab = TabController(length: 2, vsync: this);
-    _init();
-  }
-
-  @override
-  void dispose() {
-    _tab.dispose();
-    super.dispose();
-  }
-
-  Future<void> _init() async {
-    final ok = await ensureScanPermissions();
-    if (!ok && mounted) setState(() => _err = '需授予位置权限才能扫描');
-    _scan();
-  }
-
-  Future<void> _scan() async {
-    if (_scanning) return;
-    setState(() => _scanning = true);
-    _err = '';
-    try {
-      // 定位服务（GPS）是否开启：安卓 11- 关闭时 WiFi/蓝牙必然扫不到
-      final locOn = await isLocationServiceEnabled();
-      if (!locOn) {
-        _err = '未开启“定位服务 / GPS”。请在系统设置 → 位置信息 中打开，'
-            '否则绝大多数安卓机型无法扫描 WiFi / 蓝牙。';
-      }
-
-      // 真实 WiFi 扫描：startScan 后系统需要数秒完成扫描，必须等待再取结果
-      final w = WifiScanner();
-      await w.start();
-      await Future.delayed(const Duration(seconds: 3));
-      _wifi = await w.getResults();
-
-      // 真实蓝牙低功耗扫描：Android 12+ 会弹窗请求开启蓝牙
-      final b = BleScanner();
-      if (await b.supported) {
-        try {
-          await FlutterBluePlus.turnOn();
-        } catch (_) {
-          // 用户拒绝开启蓝牙时忽略，下面扫描自然为空
-        }
-        await for (final list in b.scan(timeout: const Duration(seconds: 5))) {
-          _ble = list;
-        }
-      }
-      if (mounted) setState(() {});
-    } catch (e) {
-      if (mounted) setState(() => _err = '扫描出错: $e');
-    } finally {
-      if (mounted) setState(() => _scanning = false);
-    }
-  }
-
-  Widget _tile(Device d) => Card(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: ListTile(
-          leading: Icon(
-            d.kind == DeviceKind.wifi ? Icons.wifi : Icons.bluetooth,
-            color: const Color(0xFF22B8CF),
-          ),
-          title: Text(d.name),
-          subtitle: Text('${d.brand}  ·  ${d.id}'),
-          trailing: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('${d.rssi} dBm',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text('${d.distance.toStringAsFixed(1)} m',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            ],
-          ),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => PositioningPage(device: d)),
-          ),
-        ),
-      );
-
-  Widget _list(List<Device> items, {String hint = ''}) {
-    if (items.isEmpty) {
-      return Center(
-        padding: const EdgeInsets.all(16),
-        child: Text(
-          hint.isNotEmpty ? hint : '未发现设备，点击右上角重新扫描',
-          style: const TextStyle(color: Colors.grey),
-          textAlign: TextAlign.center,
-        ),
-      );
-    }
-    return ListView.builder(
-      itemCount: items.length,
-      itemBuilder: (_, i) => _tile(items[i]),
-    );
-  }
+class DetectionPage extends StatelessWidget {
+  final AppState state;
+  const DetectionPage(this.state);
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('智能检测'),
-        actions: [
-          IconButton(
-            icon: _scanning
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.refresh),
-            onPressed: _scanning ? null : _scan,
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tab,
-          tabs: const [Tab(text: 'WiFi'), Tab(text: '蓝牙')],
+    final isWifi = state.detType == DeviceKind.wifi;
+    final title = isWifi ? 'WiFi检测' : '国外设备检测';
+    final list = state.filteredList;
+    final indoor = list.where((d) => state.isIndoor(d)).toList();
+    final outdoor = list.where((d) => !state.isIndoor(d)).toList();
+
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        child: Row(children: [
+          _iconBtn('arrow-left', state.backToApp),
+          const SizedBox(width: 12),
+          Expanded(
+              child: Text(title,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w600))),
+          _textBtn(context, '报告导出', 'download',
+              () => {state.exportReport(), toast(context, '导出成功')}),
+          const SizedBox(width: 8),
+          _scanBtn(),
+        ]),
+      ),
+      Expanded(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Column(children: [
+            Row(children: [
+              _statPill(true, indoor.length),
+              const SizedBox(width: 12),
+              _statPill(false, outdoor.length),
+            ]),
+            if (!isWifi) _chips(),
+            const SizedBox(height: 8),
+            if (indoor.isNotEmpty)
+              _group(true, '室内', indoor, isWifi, context),
+            if (outdoor.isNotEmpty)
+              _group(false, '室外', outdoor, isWifi, context),
+            if (list.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 60),
+                child: Text('未发现设备，请确认已开启定位与蓝牙后重新扫描',
+                    style: TextStyle(color: AppColors.txt3)),
+              ),
+          ]),
         ),
       ),
-      body: Column(
-        children: [
-          if (_err.isNotEmpty)
-            Container(
-              width: double.infinity,
-              color: Colors.red.withValues(alpha: 0.15),
-              padding: const EdgeInsets.all(8),
-              child: Text(_err, style: const TextStyle(color: Colors.orange)),
-            ),
-          Expanded(
-            child: TabBarView(
-              controller: _tab,
-              children: [
-                _list(_wifi),
-                _list(_ble,
-                    hint: '未发现蓝牙设备。请确认已开启蓝牙（系统设置或下拉快捷栏），并靠近待检测设备后重新扫描。'),
-              ],
-            ),
+    ]);
+  }
+
+  // ---------- 头部控件 ----------
+  Widget _iconBtn(String icon, VoidCallback onTap) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.panel2,
+            border: Border.all(color: AppColors.line),
+            borderRadius: BorderRadius.circular(10),
           ),
-        ],
+          child: Center(child: AppIcon(icon, size: 20)),
+        ),
+      );
+
+  Widget _textBtn(BuildContext ctx, String label, String icon,
+          VoidCallback onTap) =>
+      InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: AppColors.panel2,
+            border: Border.all(color: AppColors.line),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(children: [
+            AppIcon(icon, size: 16, color: AppColors.txt2),
+            const SizedBox(width: 7),
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.txt2, fontWeight: FontWeight.w500)),
+          ]),
+        ),
+      );
+
+  Widget _scanBtn() => InkWell(
+        onTap: state.toggleScan,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(colors: state.scanning
+                ? [const Color(0xFFF59E0B), const Color(0xFFD97706)]
+                : [AppColors.acc, const Color(0xFF2F6FE0)]),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(children: [
+            AppIcon(state.scanning ? 'pause' : 'play', size: 16, color: Colors.white),
+            const SizedBox(width: 7),
+            Text(state.scanning ? '暂停' : '继续扫描',
+                style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600)),
+          ]),
+        ),
+      );
+
+  // ---------- 统计 / 筛选 ----------
+  Widget _statPill(bool indoor, int n) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: indoor
+              ? AppColors.acc.withOpacity(0.13)
+              : AppColors.ok.withOpacity(0.13),
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: Row(children: [
+          AppIcon(indoor ? 'house' : 'sun', size: 16,
+              color: indoor
+                  ? const Color(0xFF8FB6FF)
+                  : const Color(0xFF5FCA86)),
+          const SizedBox(width: 8),
+          Text(indoor ? '室内' : '室外',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: indoor
+                      ? const Color(0xFF8FB6FF)
+                      : const Color(0xFF5FCA86))),
+          const SizedBox(width: 6),
+          Text('$n',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: indoor
+                      ? const Color(0xFF8FB6FF)
+                      : const Color(0xFF5FCA86))),
+        ]),
+      );
+
+  Widget _chips() {
+    final filters = [
+      ['all', '所有品牌设备'],
+      ['foreign', '国外品牌设备'],
+      ['apple', '苹果设备'],
+      ['seized', '已查扣设备'],
+    ];
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Wrap(
+        spacing: 8,
+        children: filters
+            .map((f) => InkWell(
+                  onTap: () => state.setBtFilter(f[0]),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: state.btFilter == f[0]
+                          ? AppColors.acc
+                          : AppColors.panel2,
+                      border: Border.all(color: AppColors.line),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(f[1],
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            color: state.btFilter == f[0]
+                                ? Colors.white
+                                : AppColors.txt2,
+                            fontWeight: state.btFilter == f[0]
+                                ? FontWeight.w600
+                                : FontWeight.normal)),
+                  ),
+                ))
+            .toList(),
       ),
     );
   }
+
+  // ---------- 分组表 ----------
+  Widget _group(bool indoor, String title, List<Device> items, bool isWifi,
+      BuildContext ctx) {
+    final flex = isWifi
+        ? [4, 3, 2, 3, 2, 2]
+        : [4, 3, 2, 2, 3, 2, 2];
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(children: [
+          AppIcon(indoor ? 'house' : 'sun', size: 16,
+              color: indoor ? const Color(0xFF8FB6FF) : const Color(0xFF5FCA86)),
+          const SizedBox(width: 8),
+          Text(title,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: indoor
+                      ? const Color(0xFF8FB6FF)
+                      : const Color(0xFF5FCA86))),
+          const SizedBox(width: 8),
+          Text('${items.length} 台',
+              style: const TextStyle(fontSize: 12.5, color: AppColors.txt3)),
+        ]),
+      ),
+      Container(
+        decoration: BoxDecoration(
+          color: AppColors.panel,
+          border: Border.all(color: AppColors.line),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(children: [
+          _header(flex, isWifi),
+          ...items.map((d) => _row(flex, d, isWifi, ctx)).toList(),
+        ]),
+      ),
+      const SizedBox(height: 8),
+    ]);
+  }
+
+  Widget _header(List<int> flex, bool isWifi) {
+    final labels = isWifi
+        ? ['名称', '品牌', '区域', '信号', '距离', '']
+        : ['名称', '品牌', '品类', '区域', '信号', '距离', ''];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: AppColors.line))),
+      child: Row(
+        children: List.generate(labels.length,
+            (i) => Expanded(flex: flex[i], child: Text(labels[i],
+                style: const TextStyle(fontSize: 12, color: AppColors.txt3)))),
+      ),
+    );
+  }
+
+  Widget _row(List<int> flex, Device d, bool isWifi, BuildContext ctx) {
+    final indoor = state.isIndoor(d);
+    final nameCell = Row(children: [
+      CatIcon(d.category.isEmpty ? '路由器' : d.category),
+      const SizedBox(width: 9),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(d.name,
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis),
+            Text(d.id,
+                style: const TextStyle(
+                    fontSize: 11, color: AppColors.txt2, fontFamily: 'monospace')),
+          ],
+        ),
+      ),
+    ]);
+    final brandCell = Row(children: [
+      BrandLogo(d.brand, size: 14),
+      const SizedBox(width: 7),
+      Expanded(
+        child: Row(children: [
+          Text(d.brand,
+              style: const TextStyle(fontSize: 13),
+              overflow: TextOverflow.ellipsis),
+          if (!isWifi) ...[
+            const SizedBox(width: 6),
+            DomesticTag(d.domestic),
+          ],
+        ]),
+      ),
+    ]);
+    final catCell = d.category.isEmpty
+        ? const Text('未知', style: TextStyle(fontSize: 12, color: AppColors.txt3))
+        : Row(children: [
+            CatIcon(d.category, size: 14),
+            const SizedBox(width: 6),
+            Text(d.category, style: const TextStyle(fontSize: 12)),
+          ]);
+    final signalCell = Row(children: [
+      SignalBars4(d.rssi),
+      const SizedBox(width: 6),
+      Text('${d.rssi}',
+          style: const TextStyle(fontSize: 12, color: AppColors.txt2)),
+    ]);
+    final distCell =
+        Text('${d.distance.toStringAsFixed(1)} m', style: const TextStyle(fontSize: 12));
+    final opCell = Row(children: [
+      _opBtn('定位', 'crosshair', const Color(0xFF7EB0FF),
+          () => state.openPosition(d)),
+      const SizedBox(width: 6),
+      if (d.seized)
+        const Text('已查扣',
+            style: TextStyle(fontSize: 12, color: AppColors.bad, fontWeight: FontWeight.w600))
+      else
+        _opBtn('查扣', 'gavel', const Color(0xFFF08A8A), () {
+          state.detain(d);
+          toast(ctx, '已查扣：${d.name}');
+        }),
+    ]);
+
+    final cells = isWifi
+        ? [nameCell, brandCell, ZoneTag(indoor), signalCell, distCell, opCell]
+        : [nameCell, brandCell, catCell, ZoneTag(indoor), signalCell, distCell, opCell];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: Color(0xFF1B232E)))),
+      child: Row(
+        children: List.generate(cells.length,
+            (i) => Expanded(flex: flex[i], child: cells[i])),
+      ),
+    );
+  }
+
+  Widget _opBtn(String label, String icon, Color color, VoidCallback onTap) =>
+      InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+              border: Border.all(color: color.withOpacity(0.5)),
+              borderRadius: BorderRadius.circular(8)),
+          child: Row(children: [
+            AppIcon(icon, size: 14, color: color),
+            const SizedBox(width: 5),
+            Text(label, style: TextStyle(fontSize: 12, color: color)),
+          ]),
+        ),
+      );
 }

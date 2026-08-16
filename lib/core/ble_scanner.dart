@@ -31,6 +31,8 @@ class BleScanner {
           brand: b['brand'] as String,
           domestic: b['domestic'] as bool,
           rssi: r.rssi,
+          category: '',
+          seized: false,
         );
       }).toList();
     }

@@ -17,6 +17,10 @@ dependencies:
   permission_handler: '>=11.0.0 <13.0.0'
   # 检测系统“定位服务/GPS”是否开启（安卓 11- 关闭会导致扫描为空）
   geolocator: ^13.0.0
+  # 渲染品牌 / 品类 / UI 图标 SVG（来自原始原型资源）
+  flutter_svg: ^2.0.0
+  # 报告导出写入外部存储
+  path_provider: ^2.1.0
 
 dev_dependencies:
   flutter_test:
@@ -25,3 +29,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/brands/
+    - assets/icons/

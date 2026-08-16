@@ -31,6 +31,8 @@ class WifiScanner {
         domestic: b['domestic'] as bool,
         rssi: ap.level,
         info: ap.capabilities,
+        category: '路由器',
+        seized: false,
       );
     }
     return map.values.toList();

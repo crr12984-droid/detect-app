@@ -21,3 +21,9 @@ int rssiToBars(int rssi) {
   if (rssi >= -89) return 1;
   return 0;
 }
+
+/// 4 格信号强度（用于检测列表行内信号格，与原型 bars() 一致）
+int rssiToBars4(int rssi) {
+  final n = ((rssi + 90) / 12).round();
+  return n.clamp(0, 4);
+}
