@@ -129,7 +129,7 @@ class _DetectionPageState extends State<DetectionPage>
           if (_err.isNotEmpty)
             Container(
               width: double.infinity,
-              color: Colors.red.withOpacity(0.15),
+              color: Colors.red.withValues(alpha: 0.15),
               padding: const EdgeInsets.all(8),
               child: Text(_err, style: const TextStyle(color: Colors.orange)),
             ),

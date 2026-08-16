@@ -53,7 +53,9 @@ jobs:
       # 只扫 lib/：flutter create 会生成默认 test/widget_test.dart（引用不存在的 MyApp），
       # 与 App 无关且必报错，故不纳入 analyze。
       - name: Analyze Dart code
-        run: flutter analyze lib
+        # 仅扫 lib/（test 样板不在仓库、必引用不存在的 MyApp）。
+        # --no-fatal-infos 避免“弃用提示(info)”误伤阻断构建；真正的编译错误(error)仍会失败。
+        run: flutter analyze lib --no-fatal-infos
 
       - name: Build release APK
         run: flutter build apk --release
