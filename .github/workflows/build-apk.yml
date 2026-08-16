@@ -26,11 +26,11 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
+      # subosito/flutter-action 会自动安装 Android SDK（cmdline-tools），
+      # 这里用官方命令真正接受许可证——避免出现
+      # "Failed to install the following SDK components" / 许可未接受导致的 exit 1。
       - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses || true
+        run: yes | flutter doctor --android-licenses || true
 
       # 仓库只提交 Dart 源码。原生工程一律由 flutter create 生成，
       # 保证 gradle wrapper / build.gradle / flutterEmbedding v2 等全部正确。
