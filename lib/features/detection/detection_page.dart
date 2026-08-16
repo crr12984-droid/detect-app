@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../models/device.dart';
 import '../../core/wifi_scanner.dart';
 import '../../core/ble_scanner.dart';
@@ -42,15 +43,30 @@ class _DetectionPageState extends State<DetectionPage>
   Future<void> _scan() async {
     if (_scanning) return;
     setState(() => _scanning = true);
+    _err = '';
     try {
-      // 真实 WiFi 扫描
+      // 定位服务（GPS）是否开启：安卓 11- 关闭时 WiFi/蓝牙必然扫不到
+      final locOn = await isLocationServiceEnabled();
+      if (!locOn) {
+        _err = '未开启“定位服务 / GPS”。请在系统设置 → 位置信息 中打开，'
+            '否则绝大多数安卓机型无法扫描 WiFi / 蓝牙。';
+      }
+
+      // 真实 WiFi 扫描：startScan 后系统需要数秒完成扫描，必须等待再取结果
       final w = WifiScanner();
       await w.start();
+      await Future.delayed(const Duration(seconds: 3));
       _wifi = await w.getResults();
-      // 真实蓝牙低功耗扫描
+
+      // 真实蓝牙低功耗扫描：Android 12+ 会弹窗请求开启蓝牙
       final b = BleScanner();
       if (await b.supported) {
-        await for (final list in b.scan(timeout: const Duration(seconds: 4))) {
+        try {
+          await FlutterBluePlus.turnOn();
+        } catch (_) {
+          // 用户拒绝开启蓝牙时忽略，下面扫描自然为空
+        }
+        await for (final list in b.scan(timeout: const Duration(seconds: 5))) {
           _ble = list;
         }
       }
@@ -88,11 +104,15 @@ class _DetectionPageState extends State<DetectionPage>
         ),
       );
 
-  Widget _list(List<Device> items) {
+  Widget _list(List<Device> items, {String hint = ''}) {
     if (items.isEmpty) {
-      return const Center(
-        child: Text('未发现设备，点击右上角重新扫描',
-            style: TextStyle(color: Colors.grey)),
+      return Center(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          hint.isNotEmpty ? hint : '未发现设备，点击右上角重新扫描',
+          style: const TextStyle(color: Colors.grey),
+          textAlign: TextAlign.center,
+        ),
       );
     }
     return ListView.builder(
@@ -136,7 +156,11 @@ class _DetectionPageState extends State<DetectionPage>
           Expanded(
             child: TabBarView(
               controller: _tab,
-              children: [_list(_wifi), _list(_ble)],
+              children: [
+                _list(_wifi),
+                _list(_ble,
+                    hint: '未发现蓝牙设备。请确认已开启蓝牙（系统设置或下拉快捷栏），并靠近待检测设备后重新扫描。'),
+              ],
             ),
           ),
         ],

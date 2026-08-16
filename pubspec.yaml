@@ -15,6 +15,8 @@ dependencies:
   wifi_scan: ^0.4.1
   # 运行时权限（位置 / 蓝牙）
   permission_handler: '>=11.0.0 <13.0.0'
+  # 检测系统“定位服务/GPS”是否开启（安卓 11- 关闭会导致扫描为空）
+  geolocator: ^13.0.0
 
 dev_dependencies:
   flutter_test:

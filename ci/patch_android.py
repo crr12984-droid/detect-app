@@ -30,9 +30,8 @@ PERMISSIONS = """
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- Android 13+ 免定位扫描 WiFi -->
-    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
-        android:usesPermissionFlags="neverForLocation" />
+    <!-- Android 13+ 扫描 WiFi（不声明 neverForLocation，避免部分机型 startScan 返回未授权） -->
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
 
     <!-- 蓝牙（Android 11 及以下） -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
