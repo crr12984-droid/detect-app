@@ -4,7 +4,7 @@ import '../../models/device.dart';
 import '../../core/wifi_scanner.dart';
 import '../../core/ble_scanner.dart';
 import '../../core/permissions.dart';
-import 'positioning_page.dart';
+import '../positioning/positioning_page.dart';
 
 class DetectionPage extends StatefulWidget {
   const DetectionPage({super.key});

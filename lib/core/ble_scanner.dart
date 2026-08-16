@@ -1,14 +1,14 @@
 import 'dart:async';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../models/device.dart';
-import '../brand_db.dart';
+import 'brand_db.dart';
 
 /// 真实蓝牙低功耗（BLE）扫描：读取周边广播设备（名称、MAC、信号）。
 class BleScanner {
   Future<bool> get supported async => FlutterBluePlus.isSupported;
 
   Stream<List<Device>> scan({Duration timeout = const Duration(seconds: 4)}) async* {
-    if (!FlutterBluePlus.isSupported) return;
+    if (!(await FlutterBluePlus.isSupported)) return;
     try {
       await FlutterBluePlus.startScan(
         timeout: timeout,

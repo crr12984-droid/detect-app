@@ -1,12 +1,12 @@
 import 'package:wifi_scan/wifi_scan.dart';
 import '../../models/device.dart';
-import '../brand_db.dart';
+import 'brand_db.dart';
 
 /// 真实 WiFi 扫描：读取周边 AP / 热点（SSID、BSSID、信号、加密）。
 class WifiScanner {
   Future<void> start() async {
     try {
-      await WiFiScan.startScan();
+      await WiFiScan.instance.startScan();
     } catch (_) {
       // 权限不足或设备受限时忽略，后续直接读取已有结果
     }
@@ -15,7 +15,7 @@ class WifiScanner {
   Future<List<Device>> getResults() async {
     List<WiFiAccessPoint> aps;
     try {
-      aps = await WiFiScan.getScannedResults();
+      aps = await WiFiScan.instance.getScannedResults();
     } catch (_) {
       return [];
     }
