@@ -119,35 +119,36 @@ def patch_min_sdk() -> bool:
 
 
 def patch_compile_sdk() -> bool:
-    """把 compileSdk 提到 34：battery_plus 等插件的 androidx 依赖要求 compileSdk >= 34，
-    否则 :checkReleaseAarMetadata 会失败。兼容 Kotlin DSL 与 Groovy 两种脚手架。"""
+    """把 compileSdk 提到 36：flutter_blue_plus_android / geolocator_android 等插件
+    要求 compileSdk >= 36（向后兼容），否则 :checkReleaseAarMetadata 会失败。
+    兼容 Kotlin DSL 与 Groovy 两种脚手架。"""
     kts = ROOT / "android/app/build.gradle.kts"
     groovy = ROOT / "android/app/build.gradle"
 
     if kts.exists():
         s = kts.read_text(encoding="utf-8")
-        if re.search(r"compileSdk\s*=\s*34\b", s):
-            print("[skip] build.gradle.kts compileSdk 已是 34")
+        if re.search(r"compileSdk\s*=\s*36\b", s):
+            print("[skip] build.gradle.kts compileSdk 已是 36")
             return True
         new = re.sub(r"compileSdk\s*=\s*flutter\.compileSdkVersion",
-                     "compileSdk = 34", s, count=1)
+                     "compileSdk = 36", s, count=1)
         if new != s:
             kts.write_text(new, encoding="utf-8")
-            print("[ok] build.gradle.kts compileSdk -> 34")
+            print("[ok] build.gradle.kts compileSdk -> 36")
         else:
             print("[warn] build.gradle.kts 未匹配到 compileSdk，保持默认")
         return True
 
     if groovy.exists():
         s = groovy.read_text(encoding="utf-8")
-        if re.search(r"compileSdkVersion\s+34\b", s):
-            print("[skip] build.gradle compileSdk 已是 34")
+        if re.search(r"compileSdkVersion\s+36\b", s):
+            print("[skip] build.gradle compileSdk 已是 36")
             return True
         new = re.sub(r"compileSdkVersion\s+flutter\.compileSdkVersion",
-                     "compileSdkVersion 34", s, count=1)
+                     "compileSdkVersion 36", s, count=1)
         if new != s:
             groovy.write_text(new, encoding="utf-8")
-            print("[ok] build.gradle compileSdk -> 34")
+            print("[ok] build.gradle compileSdk -> 36")
         else:
             print("[warn] build.gradle 未匹配到 compileSdk，保持默认")
         return True
