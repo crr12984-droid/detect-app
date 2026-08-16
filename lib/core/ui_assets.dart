@@ -34,13 +34,18 @@ const Map<String, Map<String, dynamic>> _catVisual = {
   '路由器': {'color': 0xFF64748B, 'icon': 'wifi'},
 };
 
+/// 品牌 key 归一化：小写并去掉连字符等非字母数字（如 "TP-Link" → "tplink"），
+/// 与 assets/brands/ 下的文件名对齐，保证真实数据匹配到的品牌能命中 logo。
+String brandKey(String brand) =>
+    brand.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
 Color brandColor(String brand) {
-  final v = _brandVisual[brand.toLowerCase()];
+  final v = _brandVisual[brandKey(brand)];
   return v == null ? const Color(0xFF8A97A8) : Color(v['color'] as int);
 }
 
 bool brandHasLogo(String brand) {
-  final v = _brandVisual[brand.toLowerCase()];
+  final v = _brandVisual[brandKey(brand)];
   return (v?['logo'] as bool?) ?? false;
 }
 
@@ -87,7 +92,7 @@ class BrandLogo extends StatelessWidget {
     }
     if (brandHasLogo(brand)) {
       return SvgPicture.asset(
-        'assets/brands/${brand.toLowerCase()}.svg',
+        'assets/brands/${brandKey(brand)}.svg',
         width: size, height: size, color: c,
       );
     }
