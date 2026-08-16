@@ -94,7 +94,7 @@ class PositioningPage extends StatelessWidget {
               const SizedBox(height: 6),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: Baseline,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
                   Text('${d.rssi}',

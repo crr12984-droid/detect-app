@@ -28,7 +28,7 @@ class DetectionPage extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w600))),
           _textBtn(context, '报告导出', 'download',
-              () => {state.exportReport(), toast(context, '导出成功')}),
+              () { state.exportReport(); toast(context, '导出成功'); }),
           const SizedBox(width: 8),
           _scanBtn(),
         ]),

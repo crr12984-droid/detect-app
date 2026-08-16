@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'core/theme.dart';
+import 'theme.dart';
 
 /// 品牌视觉：颜色 + 是否有 logo 资源（资源来自 _brands/，缺失则回退彩色字母徽标）。
 const Map<String, Map<String, dynamic>> _brandVisual = {

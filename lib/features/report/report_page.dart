@@ -117,7 +117,7 @@ class ReportPage extends StatelessWidget {
     return InkWell(
       onTap: state.selMode
           ? () => state.toggleSel(r.id)
-          : () => state.previewReport(r),
+          : () => state.openPreview(r),
       onLongPress: () {
         if (!state.selMode) {
           state.toggleSelMode();
