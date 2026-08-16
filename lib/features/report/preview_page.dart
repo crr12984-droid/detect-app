@@ -5,7 +5,6 @@ import '../../core/ui_assets.dart';
 import '../../core/report_io.dart';
 import '../../models/device.dart';
 import '../../models/report.dart';
-import '../common/widgets.dart';
 
 /// 报告预览（全屏）：PDF 样式白底文档（元信息 + 设备明细表 + U盘导出）。
 class PreviewPage extends StatelessWidget {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'theme.dart';
+import '../models/device.dart';
 
 /// 品牌视觉：颜色 + 是否有 logo 资源（资源来自 _brands/，缺失则回退彩色字母徽标）。
 const Map<String, Map<String, dynamic>> _brandVisual = {
@@ -73,7 +74,7 @@ class BrandLogo extends StatelessWidget {
         height: size + 7,
         decoration: BoxDecoration(
           color: Colors.transparent,
-          border: Border.all(color: AppColors.txt3, style: BorderStyle.dashed),
+          border: Border.all(color: AppColors.txt3),
           borderRadius: BorderRadius.circular(6),
         ),
         alignment: Alignment.center,
@@ -107,23 +108,20 @@ class WifiTypeTag extends StatelessWidget {
   const WifiTypeTag(this.type);
   @override
   Widget build(BuildContext context) {
-    final map = {
-      WifiType.ap: ['AP', const Color(0xFF7FB0FF), const Color(0xFF3B82F6)],
-      WifiType.sta: ['STA', const Color(0xFF6FD79B), const Color(0xFF2E9E5B)],
-      WifiType.direct: ['WiFi Direct', const Color(0xFFC79BFF), const Color(0xFFA855F7)],
+    final (label, fg) = switch (type) {
+      WifiType.ap => ('AP', const Color(0xFF7FB0FF)),
+      WifiType.sta => ('STA', const Color(0xFF6FD79B)),
+      WifiType.direct => ('WiFi Direct', const Color(0xFFC79BFF)),
     };
-    final v = map[type]!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: v[1].withOpacity(0.16),
+        color: fg.withOpacity(0.16),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(v[0],
+      child: Text(label,
           style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: v[1])),
+              fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
     );
   }
 }

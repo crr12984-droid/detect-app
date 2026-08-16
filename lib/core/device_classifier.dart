@@ -150,12 +150,15 @@ String _categoryFromName(String n) {
 // ---------- 名称中带出的型号 ----------
 String? _modelFromName(String name) {
   final n = name.trim();
-  final iphone =
-      RegExp(r'(?i)iphone\s*\d{1,2}(\s*(pro|max|plus|mini))?').firstMatch(n);
+  final iphone = RegExp(r'iphone\s*\d{1,2}(\s*(pro|max|plus|mini))?',
+          caseSensitive: false)
+      .firstMatch(n);
   if (iphone != null) return iphone.group(0)!;
-  final airpods = RegExp(r'(?i)airpods\s*(pro|max|\d+)?').firstMatch(n);
+  final airpods = RegExp(r'airpods\s*(pro|max|\d+)?', caseSensitive: false)
+      .firstMatch(n);
   if (airpods != null) return airpods.group(0)!;
-  final galaxy = RegExp(r'(?i)galaxy\s*[sz]\d+').firstMatch(n);
+  final galaxy = RegExp(r'galaxy\s*[sz]\d+', caseSensitive: false)
+      .firstMatch(n);
   if (galaxy != null) return galaxy.group(0)!;
   return null;
 }

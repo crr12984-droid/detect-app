@@ -269,9 +269,6 @@ class PositioningPage extends StatelessWidget {
           child: Center(child: AppIcon(icon, size: 20)),
         ),
       );
-
-  String _fmtTime(DateTime t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}';
 }
 
 /// 同心环定位器：环=信号由强到弱，方向箭头=定位方向，实时(橙)/最大(红)双点重合=已找到。
