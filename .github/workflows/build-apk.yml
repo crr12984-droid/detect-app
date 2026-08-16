@@ -50,8 +50,10 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      # 只扫 lib/：flutter create 会生成默认 test/widget_test.dart（引用不存在的 MyApp），
+      # 与 App 无关且必报错，故不纳入 analyze。
       - name: Analyze Dart code
-        run: flutter analyze
+        run: flutter analyze lib
 
       - name: Build release APK
         run: flutter build apk --release

@@ -58,7 +58,7 @@ class _PositioningPageState extends State<PositioningPage> {
       setState(() => _found = false);
       return;
     }
-    final updated = _d.copyWith(rssi: found!.rssi, seen: _d.seen + 1);
+    final updated = _d.copyWith(rssi: found.rssi, seen: _d.seen + 1);
     _history.add(updated.rssi);
     if (_history.length > 60) _history.removeAt(0);
     setState(() {
