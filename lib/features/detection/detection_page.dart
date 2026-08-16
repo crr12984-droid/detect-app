@@ -18,24 +18,6 @@ class DetectionPage extends StatelessWidget {
     final outdoor = list.where((d) => !state.isIndoor(d)).toList();
 
     return Column(children: [
-      // 顶部绿色提示（报告导出成功）
-      if (state.bannerMsg != null)
-        Container(
-          width: double.infinity,
-          color: const Color(0xFF1F8A4C),
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-          child: Row(children: [
-            const Icon(Icons.check_circle, color: Colors.white, size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(state.bannerMsg!,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14)),
-            ),
-          ]),
-        ),
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
         child: Row(children: [
@@ -220,16 +202,7 @@ class DetectionPage extends StatelessWidget {
     final flex = isWifi
         ? [4, 3, 2, 2, 3, 2, 2]
         : [4, 3, 2, 2, 3, 2, 2];
-    final cells = <Widget>[];
-    for (final d in items) {
-      cells.add(_row(flex, d, isWifi, ctx));
-      // WiFi AP 的拓扑：下挂关联 STA
-      if (isWifi &&
-          d.wifiType == WifiType.ap &&
-          d.linkedSta.isNotEmpty) {
-        cells.add(_topo(d));
-      }
-    }
+    final cells = items.map((d) => _row(flex, d, isWifi, ctx)).toList();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -389,63 +362,6 @@ class DetectionPage extends StatelessWidget {
     );
   }
 
-  /// AP 下挂 STA 拓扑（可展开）
-  Widget _topo(Device ap) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          final open = _topoOpen.contains(ap.id);
-          return Container(
-            margin: const EdgeInsets.only(left: 40, right: 12, bottom: 8),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.panel2,
-              border: Border.all(color: AppColors.line, style: BorderStyle.dashed),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(children: [
-              InkWell(
-                onTap: () => setLocal(() {
-                  if (open) {
-                    _topoOpen.remove(ap.id);
-                  } else {
-                    _topoOpen.add(ap.id);
-                  }
-                }),
-                child: Row(children: [
-                  Icon(open ? Icons.expand_less : Icons.expand_more,
-                      size: 16, color: AppColors.txt2),
-                  const SizedBox(width: 6),
-                  Text('AP 下挂 ${ap.linkedSta.length} 台 STA（点击展开）',
-                      style: const TextStyle(fontSize: 12, color: AppColors.txt2)),
-                ]),
-              ),
-              if (open)
-                ...ap.linkedSta.map((s) => Padding(
-                      padding: const EdgeInsets.only(top: 8, left: 6),
-                      child: Row(children: [
-                        Container(
-                            width: 7, height: 7, decoration: const BoxDecoration(
-                                color: Color(0xFF2E9E5B), shape: BoxShape.circle)),
-                        const SizedBox(width: 8),
-                        BrandLogo(s.brand, size: 12),
-                        const SizedBox(width: 6),
-                        Text(brandLabel(s.brand),
-                            style: const TextStyle(fontSize: 12, color: AppColors.txt2)),
-                        const SizedBox(width: 8),
-                        Text(s.mac,
-                            style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.txt3,
-                                fontFamily: 'monospace')),
-                        const Spacer(),
-                        Text('${s.rssi} dBm',
-                            style: const TextStyle(fontSize: 11, color: AppColors.txt3)),
-                      ]),
-                    )),
-            ]),
-          );
-        },
-      );
-
   Widget _opBtn(String label, String icon, Color color, VoidCallback onTap) =>
       InkWell(
         onTap: onTap,
@@ -464,6 +380,3 @@ class DetectionPage extends StatelessWidget {
         ),
       );
 }
-
-/// 记录已展开的 AP 拓扑（页面级，重建不影响）
-final Set<String> _topoOpen = {};

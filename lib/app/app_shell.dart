@@ -44,16 +44,42 @@ class AppShell extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
-        child: Column(
-          children: [
+        child: Stack(children: [
+          Column(children: [
             StatusBar(state: state),
             Expanded(child: body),
             if (showNav) _tabBar(),
-          ],
-        ),
+          ]),
+          // 导出提示：屏幕上半部居中的一小块
+          if (state.bannerMsg != null)
+            Positioned(
+              top: MediaQuery.of(context).size.height * 0.16,
+              left: 0,
+              right: 0,
+              child: Center(child: _banner(state.bannerMsg!)),
+            ),
+        ]),
       ),
     );
   }
+
+  Widget _banner(String msg) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xF01F8A4C),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: const [
+            BoxShadow(color: Colors.black38, blurRadius: 16, offset: Offset(0, 6))
+          ],
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.check_circle, color: Colors.white, size: 18),
+          const SizedBox(width: 8),
+          Text(msg,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13.5)),
+        ]),
+      );
 
   Widget _tab(String icon, String label, int idx) {
     final active = state.section == idx && state.overlay == null;
@@ -95,7 +121,7 @@ class AppShell extends StatelessWidget {
       );
 }
 
-/// 顶部状态栏：实时时钟 + 音量(可点切换静音) + 真实电量 + 操作员（与原型一致）。
+/// 顶部状态栏：实时时钟 + 音量(点击图标下方弹出小控制条) + 真实电量 + 操作员。
 class StatusBar extends StatefulWidget {
   final AppState state;
   const StatusBar({super.key, required this.state});
@@ -106,6 +132,7 @@ class StatusBar extends StatefulWidget {
 class _StatusBarState extends State<StatusBar> {
   late String _clock;
   int _batt = 0;
+  OverlayEntry? _volEntry;
 
   @override
   void initState() {
@@ -140,6 +167,43 @@ class _StatusBarState extends State<StatusBar> {
   Color _battColor() =>
       _batt < 25 ? AppColors.bad : (_batt < 50 ? AppColors.warn : AppColors.ok);
 
+  void _toggleVolume() {
+    if (_volEntry != null) {
+      _closeVolume();
+      return;
+    }
+    final entry = OverlayEntry(builder: (_) => _buildVolOverlay());
+    _volEntry = entry;
+    Overlay.of(context).insert(entry);
+  }
+
+  void _closeVolume() {
+    _volEntry?.remove();
+    _volEntry = null;
+  }
+
+  Widget _buildVolOverlay() => Stack(children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _closeVolume,
+            child: const SizedBox.expand(),
+          ),
+        ),
+        Positioned(
+          top: 42,
+          right: 14,
+          child: _VolumePopover(state: widget.state, onClose: _closeVolume),
+        ),
+      ]);
+
+  @override
+  void dispose() {
+    _volEntry?.remove();
+    _volEntry = null;
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.state;
@@ -159,14 +223,13 @@ class _StatusBarState extends State<StatusBar> {
                   fontFamily: 'monospace',
                   letterSpacing: 0.5)),
           const Spacer(),
-          // 音量按钮：点击切换静音
           InkWell(
-            onTap: s.toggleMute,
+            onTap: _toggleVolume,
             borderRadius: BorderRadius.circular(8),
             child: Row(children: [
-              AppIcon(s.muted ? 'volume-x' : 'volume-2', size: 16, color: AppColors.txt2),
+              AppIcon('volume-2', size: 16, color: AppColors.txt2),
               const SizedBox(width: 5),
-              Text(s.muted ? '已静音' : '音量 ${s.volume}',
+              Text('音量 ${s.volume}',
                   style: const TextStyle(fontSize: 12, color: AppColors.txt2)),
             ]),
           ),
@@ -187,4 +250,71 @@ class _StatusBarState extends State<StatusBar> {
       ),
     );
   }
+}
+
+/// 音量下拉小控制条（图标下方，点击空白消失）
+class _VolumePopover extends StatefulWidget {
+  final AppState state;
+  final VoidCallback onClose;
+  const _VolumePopover({required this.state, required this.onClose});
+  @override
+  State<_VolumePopover> createState() => _VolumePopoverState();
+}
+
+class _VolumePopoverState extends State<_VolumePopover> {
+  late int _v;
+  @override
+  void initState() {
+    super.initState();
+    _v = widget.state.volume;
+  }
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: AppColors.panel,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 260,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.line),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Row(children: [
+              AppIcon('volume-2', size: 16, color: AppColors.txt2),
+              const SizedBox(width: 8),
+              const Text('音量',
+                  style: TextStyle(fontSize: 13, color: AppColors.txt2)),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(
+                child: Slider(
+                  value: _v.toDouble(),
+                  min: 0,
+                  max: 100,
+                  activeColor: AppColors.acc,
+                  inactiveColor: AppColors.line,
+                  onChanged: (v) {
+                    setState(() => _v = v.round());
+                    widget.state.volume = _v;
+                    widget.state.notify();
+                  },
+                ),
+              ),
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 42,
+                child: Text('$_v%',
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.acc2)),
+              ),
+            ]),
+          ]),
+        ),
+      );
 }

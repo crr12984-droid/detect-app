@@ -191,7 +191,7 @@ class PreviewPage extends StatelessWidget {
           child: Row(children: [
             AppIcon('usb', size: 16, color: Colors.white),
             const SizedBox(width: 7),
-            const Text('U盘导出',
+            const Text('导出',
                 style: TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600)),
           ]),
         ),

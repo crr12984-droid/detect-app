@@ -302,7 +302,7 @@ class AppState {
           devices: list.map((d) => d.copyWith()).toList(),
           indoorThr: indoorThr,
         ));
-    showBanner(isWifi ? 'WiFi 检测报告已导出至本地' : '国外设备检测报告已导出至本地');
+    showBanner('报告已导出');
   }
 
   void showBanner(String msg) {

@@ -31,50 +31,45 @@ class PositioningPage extends StatelessWidget {
         ]),
       ),
       Expanded(
-        child: LayoutBuilder(
-          builder: (ctx, c) {
-            final two = c.maxWidth > 720;
-            final left = _leftCol(d, isWifi);
-            final right = _rightCol(d, isWifi);
-            if (two) {
-              return Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(flex: 4, child: left),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 5, child: right),
-                  ],
-                ),
-              );
-            }
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(children: [
-                left,
-                const SizedBox(height: 16),
-                right,
-              ]),
-            );
-          },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(children: [
+            // 2×2 等分：四区域尺寸完全一致、上下左右严格对齐
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: _sigCard(d)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _detailCard(d, isWifi)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: _locCard(d)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _trendCard()),
+                ],
+              ),
+            ),
+          ]),
         ),
       ),
     ]);
   }
 
-  // ---------- 左栏 ----------
-  Widget _leftCol(Device d, bool isWifi) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _card(
-            icon: 'activity',
-            title: '目标信号',
-            child: Column(children: [
-              const SizedBox(height: 6),
+  // ---------- 四区域卡片（尺寸一致） ----------
+  Widget _sigCard(Device d) => _card(
+        icon: 'activity',
+        title: '目标信号',
+        child: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
               Text(d.name,
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.w700),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                   overflow: TextOverflow.ellipsis),
               const SizedBox(height: 6),
               Row(
@@ -104,50 +99,39 @@ class PositioningPage extends StatelessWidget {
                       fontWeight: FontWeight.w600)),
             ]),
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: _card(
-              icon: 'crosshair',
-              title: '定位',
-              child: Column(children: [
-                const SizedBox(height: 8),
-                Expanded(child: Locator(rssi: d.rssi, maxRssi: state.maxRssi, dir: state.dir)),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _legendDot(const Color(0xFFFF9F1C), '实时信号'),
-                    const SizedBox(width: 18),
-                    _legendDot(const Color(0xFFEF4444), '最大信号'),
-                  ],
-                ),
-              ]),
-            ),
-          ),
-        ],
       );
 
-  // ---------- 右栏 ----------
-  Widget _rightCol(Device d, bool isWifi) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _card(
-            icon: 'info',
-            title: '信号详情',
-            child: _detailGrid(d, isWifi),
+  Widget _locCard(Device d) => _card(
+        icon: 'crosshair',
+        title: '定位',
+        child: Column(children: [
+          const SizedBox(height: 8),
+          Expanded(child: Locator(rssi: d.rssi, maxRssi: state.maxRssi, dir: state.dir)),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _legendDot(const Color(0xFFFF9F1C), '实时信号'),
+              const SizedBox(width: 18),
+              _legendDot(const Color(0xFFEF4444), '最大信号'),
+            ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: _card(
-              icon: 'activity',
-              title: '实时趋势曲线',
-              child: Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: TrendChart(data: state.trend),
-              ),
-            ),
-          ),
-        ],
+        ]),
+      );
+
+  Widget _detailCard(Device d, bool isWifi) => _card(
+        icon: 'info',
+        title: '信号详情',
+        child: _detailGrid(d, isWifi),
+      );
+
+  Widget _trendCard() => _card(
+        icon: 'activity',
+        title: '实时趋势曲线',
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: TrendChart(data: state.trend),
+        ),
       );
 
   Widget _card(
@@ -175,7 +159,7 @@ class PositioningPage extends StatelessWidget {
                       letterSpacing: 0.5)),
             ]),
             const SizedBox(height: 10),
-            child,
+            Expanded(child: child),
           ],
         ),
       );
