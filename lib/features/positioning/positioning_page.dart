@@ -18,10 +18,9 @@ class PositioningPage extends StatelessWidget {
       return const Center(child: Text('无追踪目标', style: TextStyle(color: AppColors.txt3)));
     }
     final isWifi = d.kind == DeviceKind.wifi;
-    final indoor = state.isIndoor(d);
 
     return Column(children: [
-      // 头部
+      // 头部（已移除右上角室内/室外文字）
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
         child: Row(children: [
@@ -29,47 +28,34 @@ class PositioningPage extends StatelessWidget {
           const SizedBox(width: 12),
           const Text('定位跟踪',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: indoor
-                  ? AppColors.acc.withOpacity(0.13)
-                  : AppColors.ok.withOpacity(0.13),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(indoor ? '室内' : '室外',
-                style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: indoor
-                        ? const Color(0xFF8FB6FF)
-                        : const Color(0xFF5FCA86))),
-          ),
         ]),
       ),
       Expanded(
         child: LayoutBuilder(
           builder: (ctx, c) {
             final two = c.maxWidth > 720;
-            final left = _leftCol(d, isWifi, indoor);
+            final left = _leftCol(d, isWifi);
             final right = _rightCol(d, isWifi);
+            if (two) {
+              return Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(flex: 4, child: left),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 5, child: right),
+                  ],
+                ),
+              );
+            }
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
-              child: two
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: left),
-                        const SizedBox(width: 16),
-                        Expanded(child: right),
-                      ],
-                    )
-                  : Column(children: [
-                      left,
-                      const SizedBox(height: 16),
-                      right,
-                    ]),
+              child: Column(children: [
+                left,
+                const SizedBox(height: 16),
+                right,
+              ]),
             );
           },
         ),
@@ -78,10 +64,9 @@ class PositioningPage extends StatelessWidget {
   }
 
   // ---------- 左栏 ----------
-  Widget _leftCol(Device d, bool isWifi, bool indoor) => Column(
+  Widget _leftCol(Device d, bool isWifi) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 目标信号卡
           _card(
             icon: 'activity',
             title: '目标信号',
@@ -109,31 +94,35 @@ class PositioningPage extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _signalMeter(d.rssi),
+              const SizedBox(height: 6),
+              Text(state.isIndoor(d) ? '室内' : '室外',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: state.isIndoor(d)
+                          ? const Color(0xFF8FB6FF)
+                          : const Color(0xFF5FCA86),
+                      fontWeight: FontWeight.w600)),
             ]),
           ),
           const SizedBox(height: 16),
-          // 定位器卡
-          _card(
-            icon: 'crosshair',
-            title: '定位',
-            flex: true,
-            child: Column(children: [
-              const SizedBox(height: 8),
-              Locator(
-                rssi: d.rssi,
-                maxRssi: state.maxRssi,
-                dir: state.dir,
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _legendDot(const Color(0xFFFF9F1C), '实时信号'),
-                  const SizedBox(width: 18),
-                  _legendDot(const Color(0xFFEF4444), '最大信号'),
-                ],
-              ),
-            ]),
+          Expanded(
+            child: _card(
+              icon: 'crosshair',
+              title: '定位',
+              child: Column(children: [
+                const SizedBox(height: 8),
+                Expanded(child: Locator(rssi: d.rssi, maxRssi: state.maxRssi, dir: state.dir)),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _legendDot(const Color(0xFFFF9F1C), '实时信号'),
+                    const SizedBox(width: 18),
+                    _legendDot(const Color(0xFFEF4444), '最大信号'),
+                  ],
+                ),
+              ]),
+            ),
           ),
         ],
       );
@@ -148,13 +137,14 @@ class PositioningPage extends StatelessWidget {
             child: _detailGrid(d, isWifi),
           ),
           const SizedBox(height: 16),
-          _card(
-            icon: 'activity',
-            title: '实时趋势曲线',
-            flex: true,
-            child: SizedBox(
-              height: 200,
-              child: TrendChart(data: state.trend),
+          Expanded(
+            child: _card(
+              icon: 'activity',
+              title: '实时趋势曲线',
+              child: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TrendChart(data: state.trend),
+              ),
             ),
           ),
         ],
@@ -163,8 +153,7 @@ class PositioningPage extends StatelessWidget {
   Widget _card(
           {required String icon,
           required String title,
-          required Widget child,
-          bool flex = false}) =>
+          required Widget child}) =>
       Container(
         decoration: BoxDecoration(
           color: AppColors.panel,
@@ -185,15 +174,18 @@ class PositioningPage extends StatelessWidget {
                       color: AppColors.txt2,
                       letterSpacing: 0.5)),
             ]),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             child,
           ],
         ),
       );
 
-  /// 8 格信号条（与原型 rssiLevel 公式一致：clamp(round((rssi+100)/60*8),0,8)）
+  /// 8 格信号条（与原型一致：clamp(round((rssi+100)/60*8),0,8)），随信号动态变化
   Widget _signalMeter(int rssi) {
     final n = ((rssi + 100) / 60 * 8).round().clamp(0, 8);
+    final color = rssi >= state.indoorThr
+        ? const Color(0xFFFACC15)
+        : const Color(0xFF46536A);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(8, (i) {
@@ -203,7 +195,7 @@ class PositioningPage extends StatelessWidget {
           height: 20,
           margin: const EdgeInsets.symmetric(horizontal: 2.5),
           decoration: BoxDecoration(
-            color: on ? const Color(0xFFFACC15) : Colors.transparent,
+            color: on ? color : Colors.transparent,
             border: Border.all(color: const Color(0xFF46536A)),
             borderRadius: BorderRadius.circular(3),
           ),
@@ -219,26 +211,30 @@ class PositioningPage extends StatelessWidget {
         Text(label, style: const TextStyle(fontSize: 11.5, color: AppColors.txt2)),
       ]);
 
+  /// 信号详情（紧凑 3 列，缩小行间距）
   Widget _detailGrid(Device d, bool isWifi) {
     final rows = isWifi
         ? [
             ['名称', d.name],
-            ['品牌', d.brand],
-            ['类型', d.category.isEmpty ? '路由器' : d.category],
+            ['品牌', brandLabel(d.brand)],
+            ['类型', d.wifiType == WifiType.direct
+                ? 'WiFi Direct'
+                : d.wifiType == WifiType.sta
+                    ? 'STA'
+                    : 'AP'],
             ['区域', state.isIndoor(d) ? '室内' : '室外'],
             ['距离', '${d.distance.toStringAsFixed(1)} m'],
             ['加密', d.info ?? '—'],
-            ['发现时间', _fmtTime(d.firstSeen)],
+            ['最大信号', '${state.maxRssi.round()}'],
             ['发现次数', '${d.seen} 次'],
             ['BSSID', d.id],
           ]
         : [
             ['名称', d.name],
-            ['品牌', '${d.brand}${d.domestic ? '（国产）' : '（进口）'}'],
+            ['品牌', brandLabel(d.brand)],
             ['品类', d.category.isEmpty ? '未知' : d.category],
             ['区域', state.isIndoor(d) ? '室内' : '室外'],
             ['距离', '${d.distance.toStringAsFixed(1)} m'],
-            ['发现时间', _fmtTime(d.firstSeen)],
             ['发现次数', '${d.seen} 次'],
             ['MAC', d.id],
           ];
@@ -246,9 +242,10 @@ class PositioningPage extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 3.2,
-        crossAxisSpacing: 18,
+        crossAxisCount: 3,
+        childAspectRatio: 3.6,
+        crossAxisSpacing: 14,
+        mainAxisSpacing: 2,
       ),
       itemCount: rows.length,
       itemBuilder: (_, i) => _drow(rows[i][0], rows[i][1]),
@@ -256,17 +253,17 @@ class PositioningPage extends StatelessWidget {
   }
 
   Widget _drow(String k, String v) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 9),
+        padding: const EdgeInsets.symmetric(vertical: 6),
         decoration: const BoxDecoration(
             border: Border(bottom: BorderSide(color: Color(0xFF1B232E)))),
         child: Row(children: [
-          Text(k, style: const TextStyle(fontSize: 12.5, color: AppColors.txt3)),
+          Text(k, style: const TextStyle(fontSize: 12, color: AppColors.txt3)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(v,
                 textAlign: TextAlign.right,
                 style: const TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
                     color: AppColors.txt),
                 overflow: TextOverflow.ellipsis),
@@ -305,11 +302,13 @@ class Locator extends StatelessWidget {
       required this.dir});
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 200,
-        height: 200,
-        child: CustomPaint(
-          painter: _LocatorPainter(rssi, maxRssi, dir),
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (_, c) => SizedBox(
+          width: c.maxWidth,
+          height: c.maxHeight,
+          child: CustomPaint(
+            painter: _LocatorPainter(rssi, maxRssi, dir),
+          ),
         ),
       );
 }
@@ -329,7 +328,6 @@ class _LocatorPainter extends CustomPainter {
     final rings = [90.0, 72.0, 54.0, 36.0, 18.0];
     final labels = [-100, -80, -60, -40, -20];
 
-    // 同心环
     final ringPaint = Paint()
       ..color = const Color(0x665E8A74)
       ..style = PaintingStyle.stroke
@@ -337,14 +335,12 @@ class _LocatorPainter extends CustomPainter {
     for (final r in rings) {
       canvas.drawCircle(Offset(c, c), r * scale, ringPaint);
     }
-    // 十字轴
     final axisPaint = Paint()
       ..color = const Color(0x295E8A74)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     canvas.drawLine(Offset(c, c - 96 * scale), Offset(c, c + 96 * scale), axisPaint);
     canvas.drawLine(Offset(c - 96 * scale, c), Offset(c + 96 * scale, c), axisPaint);
-    // 环标签
     final tp = TextPainter(textDirection: TextDirection.ltr);
     for (var i = 0; i < rings.length; i++) {
       tp.text = TextSpan(
@@ -354,10 +350,8 @@ class _LocatorPainter extends CustomPainter {
       tp.layout();
       tp.paint(canvas, Offset(c + 3 * scale, c - rings[i] * scale - 4 * scale));
     }
-    // 中心点
     canvas.drawCircle(Offset(c, c), 3 * scale,
         Paint()..color = const Color(0xFF5E6977));
-    // 方向箭头
     final rad = dir * pi / 180;
     final ux = cos(rad), uy = sin(rad);
     final ex = c + ux * 86 * scale, ey = c + uy * 86 * scale;
@@ -366,7 +360,6 @@ class _LocatorPainter extends CustomPainter {
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
     canvas.drawLine(Offset(c, c), Offset(ex, ey), arrowPaint);
-    // 箭头头部
     final ah = 7.0 * scale;
     final ang = atan2(uy, ux);
     canvas.drawLine(
@@ -377,10 +370,8 @@ class _LocatorPainter extends CustomPainter {
         Offset(ex, ey),
         Offset(ex - ah * cos(ang + 0.5), ey - ah * sin(ang + 0.5)),
         arrowPaint);
-    // 实时点（橙）
     final rl = _rOf(rssi.toDouble());
     _dot(canvas, c + ux * rl * scale, c + uy * rl * scale, const Color(0xFFFF9F1C));
-    // 最大点（红）
     final rm = _rOf(maxRssi);
     _dot(canvas, c + ux * rm * scale, c + uy * rm * scale, const Color(0xFFEF4444));
   }
@@ -423,7 +414,6 @@ class _TrendPainter extends CustomPainter {
     final yTop = 0.0, yBot = -100.0;
     double yOf(double v) => padT + ((yTop - v) / (yTop - yBot)) * plotH;
 
-    // 网格 + Y 轴刻度
     final grid = Paint()..color = const Color(0xFF2A3340);
     final lbl = TextPainter(textDirection: TextDirection.ltr);
     for (final s in [0, -20, -40, -60, -80, -100]) {
@@ -435,7 +425,6 @@ class _TrendPainter extends CustomPainter {
       lbl.layout();
       lbl.paint(canvas, Offset(padL - 6 - lbl.width, y - lbl.height / 2));
     }
-    // X 轴分段（每 5s）
     for (var t = 0; t <= 60; t += 5) {
       final gx = padL + (t / 60) * plotW;
       canvas.drawLine(Offset(gx, padT), Offset(gx, padT + plotH), grid);
@@ -452,7 +441,6 @@ class _TrendPainter extends CustomPainter {
     final step = plotW / (N - 1);
     final pts = [for (var i = 0; i < N; i++) Offset(padL + i * step, yOf(data[i].toDouble()))];
 
-    // 面积
     final areaPath = Path()
       ..moveTo(pts[0].dx, padT + plotH)
       ..lineTo(pts[0].dx, pts[0].dy);
@@ -464,7 +452,6 @@ class _TrendPainter extends CustomPainter {
         Paint()
           ..color = const Color(0x4222B8CF)
           ..style = PaintingStyle.fill);
-    // 折线
     final linePath = Path()
       ..moveTo(pts[0].dx, pts[0].dy);
     for (final p in pts) linePath.lineTo(p.dx, p.dy);
@@ -475,7 +462,6 @@ class _TrendPainter extends CustomPainter {
           ..strokeWidth = 2
           ..style = PaintingStyle.stroke
           ..strokeJoin = StrokeJoin.round);
-    // 最新点
     canvas.drawCircle(pts.last, 3.5, Paint()..color = const Color(0xFF22B8CF));
   }
 

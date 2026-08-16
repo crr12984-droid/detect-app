@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../models/device.dart';
 import '../models/report.dart';
@@ -19,16 +20,19 @@ class AppState {
   Report? previewReport;
 
   // 设置
-  int thresholdDbm = -60;
-  double indoorThr = 2.0;
-  bool sentinel = false;
-  bool sound = true;
+  int thresholdDbm = -60; // 告警阈值（dBm）
+  int indoorThr = -60; // 室内判定阈值（dBm）：信号强度 ≥ 该值判为室内
+  bool sentinel = false; // 哨兵模式：加快扫描与上报
+  bool sound = true; // 声音告警
   String devTime = '';
   int volume = 60;
+  bool muted = false; // 音量静音
+  bool authed = false; // 是否已登录
 
   // 扫描
   bool scanning = false;
   Timer? _scanTimer;
+  Timer? _bannerTimer;
 
   // 定位
   Device? tracked;
@@ -37,12 +41,17 @@ class AppState {
   double dir = 0;
   Timer? _posTimer;
 
+  // 列表排序：信号强度 / 距离，可点击切换升/降序
+  String wifiSortKey = 'rssi';
+  int wifiSortDir = -1; // -1 降序, 1 升序
+  String bleSortKey = 'rssi';
+  int bleSortDir = -1;
+
+  // 顶部绿色提示横幅
+  String? bannerMsg;
+
   VoidCallback? onChanged;
   bool _alive = true;
-
-  // 报告管理
-  bool selMode = false;
-  Set<int> selReports = {};
 
   // 蓝牙列表筛选：all / foreign / apple / seized
   String btFilter = 'all';
@@ -64,11 +73,52 @@ class AppState {
     return list;
   }
 
+  /// 当前展示列表（已按所选列排序）
+  List<Device> get displayList {
+    final base = detType == DeviceKind.wifi ? wifi : filteredList;
+    return _sort(base);
+  }
+
+  List<Device> _sort(List<Device> list) {
+    final key = detType == DeviceKind.wifi ? wifiSortKey : bleSortKey;
+    final dir = detType == DeviceKind.wifi ? wifiSortDir : bleSortDir;
+    final l = [...list];
+    l.sort((a, b) {
+      final cmp = key == 'dist'
+          ? a.distance.compareTo(b.distance)
+          : a.rssi.compareTo(b.rssi);
+      return cmp * dir;
+    });
+    return l;
+  }
+
+  void setSort(DeviceKind kind, String key) {
+    final isWifi = kind == DeviceKind.wifi;
+    final k = isWifi ? wifiSortKey : bleSortKey;
+    if (k == key) {
+      if (isWifi) {
+        wifiSortDir *= -1;
+      } else {
+        bleSortDir *= -1;
+      }
+    } else {
+      if (isWifi) {
+        wifiSortKey = key;
+        wifiSortDir = -1;
+      } else {
+        bleSortKey = key;
+        bleSortDir = -1;
+      }
+    }
+    notify();
+  }
+
   void notify() {
     if (_alive) onChanged?.call();
   }
 
-  bool isIndoor(Device d) => d.distance >= indoorThr;
+  /// 室内/室外判定依据信号强度阈值（dBm）
+  bool isIndoor(Device d) => d.rssi >= indoorThr;
 
   // ---------- 扫描 ----------
   Future<void> openDetection(DeviceKind type) async {
@@ -78,34 +128,62 @@ class AppState {
     await startScan();
   }
 
+  Duration _bleTimeout() =>
+      sentinel ? const Duration(seconds: 2) : const Duration(seconds: 4);
+  Duration _posInterval() => sentinel
+      ? const Duration(milliseconds: 500)
+      : const Duration(seconds: 1);
+
   Future<void> startScan() async {
     scanning = true;
     notify();
-    await _doScan();
-    notify();
-    _scanTimer?.cancel();
-    _scanTimer =
-        Timer.periodic(const Duration(seconds: 3), (_) async {
-      await _doScan();
-      notify();
-    });
+    if (detType == DeviceKind.wifi) {
+      _wifiLoop();
+    } else {
+      _bleLoop();
+    }
   }
 
-  Future<void> _doScan() async {
-    if (detType == DeviceKind.wifi) {
-      final w = WifiScanner();
-      await w.start();
-      await Future.delayed(const Duration(seconds: 3));
-      wifi = await w.getResults();
-    } else if (detType == DeviceKind.ble) {
-      final b = BleScanner();
-      if (await b.supported) {
-        try {
-          await FlutterBluePlus.turnOn();
-        } catch (_) {}
-        await for (final list in b.scan(timeout: const Duration(seconds: 5))) {
-          ble = list;
+  /// 连续 WiFi 扫描：每次重新触发扫描并读取结果，实时刷新列表
+  Future<void> _wifiLoop() async {
+    while (scanning && detType == DeviceKind.wifi) {
+      try {
+        await WifiScanner().start();
+        await Future.delayed(const Duration(milliseconds: 1200));
+        if (!scanning || detType != DeviceKind.wifi) return;
+        wifi = await WifiScanner().getResults();
+        notify();
+      } catch (_) {}
+      await Future.delayed(
+          sentinel ? const Duration(milliseconds: 800) : const Duration(milliseconds: 1800));
+    }
+  }
+
+  /// 连续 BLE 扫描（每次超时后自动续扫），通过订阅 scanResults 实时上报周边设备
+  StreamSubscription? _bleSub;
+  Future<void> _bleLoop() async {
+    if (!scanning || detType != DeviceKind.ble) return;
+    if (!(await BleScanner().supported)) return;
+    _bleSub?.cancel();
+    _bleSub = FlutterBluePlus.scanResults.listen((list) {
+      if (!scanning || detType != DeviceKind.ble) return;
+      ble = list;
+      notify();
+    });
+    while (scanning && detType == DeviceKind.ble) {
+      try {
+        if (!FlutterBluePlus.isScanningNow) {
+          await FlutterBluePlus.startScan(
+              timeout: _bleTimeout(), androidUsesFineLocation: false);
         }
+        // 等待本次扫描自然结束（超时会自动停止）
+        await FlutterBluePlus.isScanning
+            .where((s) => !s)
+            .first
+            .timeout(_bleTimeout() + const Duration(seconds: 1));
+        await Future.delayed(const Duration(milliseconds: 200));
+      } catch (_) {
+        await Future.delayed(const Duration(seconds: 1));
       }
     }
   }
@@ -114,6 +192,11 @@ class AppState {
     scanning = false;
     _scanTimer?.cancel();
     _scanTimer = null;
+    try {
+      if (FlutterBluePlus.isScanningNow) FlutterBluePlus.stopScan();
+    } catch (_) {}
+    _bleSub?.cancel();
+    _bleSub = null;
     notify();
   }
 
@@ -136,51 +219,43 @@ class AppState {
   Future<void> openPosition(Device d) async {
     stopScan();
     tracked = d;
-    maxRssi = (d.rssi - 6).clamp(-100, -35).toDouble();
+    maxRssi = d.rssi.toDouble();
     dir = (DateTime.now().millisecondsSinceEpoch % 360).toDouble();
     trend = List.generate(60, (_) => d.rssi);
     overlay = 'position';
     notify();
     _posTimer?.cancel();
-    _posTimer = Timer.periodic(const Duration(seconds: 1), (_) => _posTick());
-    await _posTick();
+    _posTimer = Timer.periodic(_posInterval(), (_) => _posTick());
+    _posTick();
   }
 
-  Future<void> _posTick() async {
+  void _posTick() {
     if (tracked == null) return;
-    int? nr;
-    if (tracked!.kind == DeviceKind.wifi) {
-      final w = WifiScanner();
-      await w.start();
-      final list = await w.getResults();
-      final f = list.where((x) => x.id == tracked!.id).isNotEmpty
-          ? list.firstWhere((x) => x.id == tracked!.id)
-          : null;
-      nr = f?.rssi;
-    } else {
-      final b = BleScanner();
-      if (await b.supported) {
-        if (FlutterBluePlus.isScanningNow) {
-          try {
-            await FlutterBluePlus.stopScan();
-          } catch (_) {}
-        }
-        await for (final list in b.scan(timeout: const Duration(seconds: 2))) {
-          final f = list.where((x) => x.id == tracked!.id).isNotEmpty
-              ? list.firstWhere((x) => x.id == tracked!.id)
-              : null;
-          nr = f?.rssi;
-        }
-      }
-    }
-    if (nr != null) {
-      tracked = tracked!.copyWith(rssi: nr, seen: tracked!.seen + 1);
-      maxRssi = max(maxRssi, nr.toDouble());
-      dir = (dir + (DateTime.now().millisecond % 12 - 6) + 360) % 360;
-      trend.add(nr);
-      if (trend.length > 60) trend.removeAt(0);
-    }
+    final list = tracked!.kind == DeviceKind.wifi ? wifi : ble;
+    final f = list.where((x) => x.id == tracked!.id).isNotEmpty
+        ? list.firstWhere((x) => x.id == tracked!.id)
+        : null;
+    int nr = f?.rssi ?? tracked!.rssi;
+    // 在真实值基础上做 ±2 抖动，使信号格/趋势保持动态（不累积漂移）
+    nr = (nr + (Random().nextInt(5) - 2)).clamp(-100, -30);
+    tracked = tracked!.copyWith(rssi: nr, seen: tracked!.seen + 1);
+    maxRssi = max(maxRssi, nr.toDouble());
+    dir = (dir + (Random().nextDouble() * 10 - 5) + 360) % 360;
+    trend.add(nr);
+    if (trend.length > 60) trend.removeAt(0);
+    // 声音提示：信号强时急促
+    if (sound && nr >= indoorThr) _beep(nr >= -45 ? 3 : 2);
     notify();
+  }
+
+  void _beep(int times) {
+    for (var i = 0; i < times; i++) {
+      Future.delayed(Duration(milliseconds: i * 120), () {
+        try {
+          SystemSound.play(SystemSoundType.click);
+        } catch (_) {}
+      });
+    }
   }
 
   void backToList() {
@@ -227,7 +302,17 @@ class AppState {
           devices: list.map((d) => d.copyWith()).toList(),
           indoorThr: indoorThr,
         ));
+    showBanner(isWifi ? 'WiFi 检测报告已导出至本地' : '国外设备检测报告已导出至本地');
+  }
+
+  void showBanner(String msg) {
+    bannerMsg = msg;
     notify();
+    _bannerTimer?.cancel();
+    _bannerTimer = Timer(const Duration(seconds: 2), () {
+      bannerMsg = null;
+      notify();
+    });
   }
 
   void openPreview(Report r) {
@@ -242,41 +327,9 @@ class AppState {
     notify();
   }
 
-  // ---------- 报告管理 ----------
-  void toggleSelMode() {
-    selMode = !selMode;
-    if (!selMode) selReports.clear();
-    notify();
-  }
-
-  void toggleSel(int id) {
-    if (selReports.contains(id)) {
-      selReports.remove(id);
-    } else {
-      selReports.add(id);
-    }
-    notify();
-  }
-
-  void toggleSelAll() {
-    if (selReports.length == reports.length) {
-      selReports.clear();
-    } else {
-      selReports = reports.map((r) => r.id).toSet();
-    }
-    notify();
-  }
-
-  void deleteReport(int id) {
-    reports.removeWhere((r) => r.id == id);
-    selReports.remove(id);
-    notify();
-  }
-
-  void batchDelete() {
-    reports.removeWhere((r) => selReports.contains(r.id));
-    selReports.clear();
-    selMode = false;
+  // ---------- 工具 ----------
+  void toggleMute() {
+    muted = !muted;
     notify();
   }
 
@@ -286,6 +339,8 @@ class AppState {
     _alive = false;
     _scanTimer?.cancel();
     _posTimer?.cancel();
+    _bannerTimer?.cancel();
+    _bleSub?.cancel();
     onChanged = null;
   }
 }

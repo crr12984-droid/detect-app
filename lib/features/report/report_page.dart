@@ -6,7 +6,7 @@ import '../../core/report_io.dart';
 import '../../models/report.dart';
 import '../common/widgets.dart';
 
-/// 报告管理：列表 + 选择(批量删除) + 单条删除 + 点按预览 + CSV 导出。
+/// 报告管理：列表 + 点按预览（全屏 PDF 报告）+ 单条导出/删除。
 class ReportPage extends StatelessWidget {
   final AppState state;
   const ReportPage(this.state);
@@ -15,87 +15,7 @@ class ReportPage extends StatelessWidget {
   Widget build(BuildContext context) => Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-          child: Row(children: [
-            const SecHead('报告管理'),
-            const Spacer(),
-            if (state.selMode) ...[
-              InkWell(
-                onTap: state.toggleSelAll,
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.panel2,
-                    border: Border.all(color: AppColors.line),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Center(
-                      child: Text('全选', style: TextStyle(fontSize: 13, color: AppColors.txt2))),
-                ),
-              ),
-              const SizedBox(width: 8),
-              InkWell(
-                onTap: () {
-                  if (state.selReports.isEmpty) {
-                    toast(context, '请先勾选要删除的报告');
-                    return;
-                  }
-                  _confirm(context, '批量删除',
-                      '确定删除选中的 ${state.selReports.length} 个报告？此操作不可恢复。',
-                      () => state.batchDelete());
-                },
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.bad.withOpacity(0.13),
-                    border: Border.all(color: AppColors.bad.withOpacity(0.5)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Center(
-                      child: Text('批量删除',
-                          style: TextStyle(fontSize: 13, color: AppColors.bad))),
-                ),
-              ),
-              const SizedBox(width: 8),
-              InkWell(
-                onTap: state.toggleSelMode,
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.panel2,
-                    border: Border.all(color: AppColors.line),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Center(
-                      child: Text('取消', style: TextStyle(fontSize: 13, color: AppColors.txt2))),
-                ),
-              ),
-            ] else ...[
-              InkWell(
-                onTap: state.toggleSelMode,
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.panel2,
-                    border: Border.all(color: AppColors.line),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(children: [
-                    AppIcon('list', size: 15, color: AppColors.txt2),
-                    const SizedBox(width: 6),
-                    const Text('管理', style: TextStyle(fontSize: 13, color: AppColors.txt2)),
-                  ]),
-                ),
-              ),
-            ],
-          ]),
+          child: const SecHead('报告管理'),
         ),
         Expanded(
           child: state.reports.isEmpty
@@ -112,58 +32,32 @@ class ReportPage extends StatelessWidget {
       ]);
 
   Widget _item(Report r, BuildContext ctx) {
-    final selected = state.selReports.contains(r.id);
     final isWifi = r.type == 'wifi';
     return InkWell(
-      onTap: state.selMode
-          ? () => state.toggleSel(r.id)
-          : () => state.openPreview(r),
-      onLongPress: () {
-        if (!state.selMode) {
-          state.toggleSelMode();
-          state.toggleSel(r.id);
-        }
-      },
+      onTap: () => state.openPreview(r),
       borderRadius: BorderRadius.circular(14),
       child: Container(
         decoration: BoxDecoration(
-          color: selected ? AppColors.acc.withOpacity(0.08) : AppColors.panel,
-          border: Border.all(
-              color: selected ? AppColors.acc : AppColors.line),
+          color: AppColors.panel,
+          border: Border.all(color: AppColors.line),
           borderRadius: BorderRadius.circular(14),
         ),
         padding: const EdgeInsets.all(16),
         child: Row(children: [
-          if (state.selMode)
-            Container(
-              width: 22,
-              height: 22,
-              margin: const EdgeInsets.only(right: 12),
-              decoration: BoxDecoration(
-                color: selected ? AppColors.acc : Colors.transparent,
-                border: Border.all(
-                    color: selected ? AppColors.acc : AppColors.txt3),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: selected
-                  ? const Icon(Icons.check, size: 16, color: Colors.white)
-                  : null,
-            )
-          else
-            Container(
-              width: 44,
-              height: 44,
-              margin: const EdgeInsets.only(right: 14),
-              decoration: BoxDecoration(
-                color: (isWifi ? AppColors.acc : const Color(0xFF8B5CF6))
-                    .withOpacity(0.14),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                  child: AppIcon(isWifi ? 'wifi' : 'bluetooth',
-                      size: 22,
-                      color: isWifi ? AppColors.acc : const Color(0xFF8B5CF6))),
+          Container(
+            width: 44,
+            height: 44,
+            margin: const EdgeInsets.only(right: 14),
+            decoration: BoxDecoration(
+              color: (isWifi ? AppColors.acc : const Color(0xFF8B5CF6))
+                  .withOpacity(0.14),
+              borderRadius: BorderRadius.circular(12),
             ),
+            child: Center(
+                child: AppIcon(isWifi ? 'wifi' : 'bluetooth',
+                    size: 22,
+                    color: isWifi ? AppColors.acc : const Color(0xFF8B5CF6))),
+          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,30 +71,28 @@ class ReportPage extends StatelessWidget {
               ],
             ),
           ),
-          if (!state.selMode) ...[
-            _mini(ctx, 'usb', '导出', () async {
-              final p = await saveCsv(r);
-              toast(ctx, '已导出：${p.split('/').last}');
-            }),
-            const SizedBox(width: 8),
-            InkWell(
-              onTap: () => _confirm(ctx, '删除报告',
-                  '确定删除该报告？此操作不可恢复。', () => state.deleteReport(r.id)),
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.bad.withOpacity(0.5)),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(
-                    child: AppIcon('trash-2', size: 16, color: AppColors.bad)),
+          _mini(ctx, 'usb', '导出', () async {
+            final p = await saveCsv(r);
+            state.showBanner('已通过设备U盘导出：${p.split('/').last}');
+          }),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: () => _confirm(ctx, '删除报告',
+                '确定删除该报告？此操作不可恢复。', () => state.deleteReport(r.id)),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.bad.withOpacity(0.5)),
+                borderRadius: BorderRadius.circular(8),
               ),
+              child: Center(
+                  child: AppIcon('trash-2', size: 16, color: AppColors.bad)),
             ),
-            const SizedBox(width: 8),
-            AppIcon('chevron-right', size: 18, color: AppColors.txt3),
-          ],
+          ),
+          const SizedBox(width: 8),
+          AppIcon('chevron-right', size: 18, color: AppColors.txt3),
         ]),
       ),
     );

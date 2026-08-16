@@ -6,7 +6,7 @@ class Report {
   final String time;
   final int count;
   final List<dynamic> devices; // List<Device>
-  final double indoorThr;
+  final int indoorThr; // 室内判定阈值（dBm）
   final String remark;
 
   Report({
@@ -17,7 +17,7 @@ class Report {
     required this.time,
     required this.count,
     required this.devices,
-    this.indoorThr = 2.0,
+    this.indoorThr = -60,
     this.remark = '',
   });
 }

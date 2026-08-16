@@ -53,14 +53,37 @@ String catIcon(String cat) {
   return (v?['icon'] as String?) ?? 'laptop';
 }
 
-/// 品牌 logo：有 SVG 资源则渲染并染成品牌色，否则彩色字母徽标（与原型一致）。
+/// 品牌展示名：未知时明确标识
+String brandLabel(String brand) =>
+    (brand.isEmpty || brand == '未知') ? '未知品牌' : brand;
+
+/// 品牌 logo：有 SVG 资源则渲染并染成品牌色；未知品牌用虚线"?"徽标明确标识；
+/// 其余用彩色字母徽标（与原型一致）。
 class BrandLogo extends StatelessWidget {
   final String brand;
   final double size;
   const BrandLogo(this.brand, {this.size = 13});
   @override
   Widget build(BuildContext context) {
+    final unknown = brand.isEmpty || brand == '未知';
     final c = brandColor(brand);
+    if (unknown) {
+      return Container(
+        width: size + 7,
+        height: size + 7,
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          border: Border.all(color: AppColors.txt3, style: BorderStyle.dashed),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        alignment: Alignment.center,
+        child: Text('?',
+            style: TextStyle(
+                color: AppColors.txt3,
+                fontSize: size * 0.8,
+                fontWeight: FontWeight.bold)),
+      );
+    }
     if (brandHasLogo(brand)) {
       return SvgPicture.asset(
         'assets/brands/${brand.toLowerCase()}.svg',
@@ -72,8 +95,35 @@ class BrandLogo extends StatelessWidget {
       decoration: BoxDecoration(
           color: c.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
       alignment: Alignment.center,
-      child: Text(brand.isNotEmpty ? brand[0].toUpperCase() : '?',
+      child: Text(brand[0].toUpperCase(),
           style: TextStyle(color: c, fontSize: size * 0.8, fontWeight: FontWeight.bold)),
+    );
+  }
+}
+
+/// WiFi 类型标签：AP / STA / WiFi Direct
+class WifiTypeTag extends StatelessWidget {
+  final WifiType type;
+  const WifiTypeTag(this.type);
+  @override
+  Widget build(BuildContext context) {
+    final map = {
+      WifiType.ap: ['AP', const Color(0xFF7FB0FF), const Color(0xFF3B82F6)],
+      WifiType.sta: ['STA', const Color(0xFF6FD79B), const Color(0xFF2E9E5B)],
+      WifiType.direct: ['WiFi Direct', const Color(0xFFC79BFF), const Color(0xFFA855F7)],
+    };
+    final v = map[type]!;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: v[1].withOpacity(0.16),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(v[0],
+          style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: v[1])),
     );
   }
 }

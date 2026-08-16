@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:battery_plus/battery_plus.dart';
 import '../core/theme.dart';
 import '../core/ui_assets.dart';
 import 'app_state.dart';
@@ -45,7 +46,7 @@ class AppShell extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const StatusBar(),
+            StatusBar(state: state),
             Expanded(child: body),
             if (showNav) _tabBar(),
           ],
@@ -94,68 +95,96 @@ class AppShell extends StatelessWidget {
       );
 }
 
-/// 顶部状态栏：实时时钟 + 音量 + 电量 + 操作员状态（与原型一致）。
+/// 顶部状态栏：实时时钟 + 音量(可点切换静音) + 真实电量 + 操作员（与原型一致）。
 class StatusBar extends StatefulWidget {
-  const StatusBar({super.key});
+  final AppState state;
+  const StatusBar({super.key, required this.state});
   @override
   State<StatusBar> createState() => _StatusBarState();
 }
 
 class _StatusBarState extends State<StatusBar> {
   late String _clock;
-  late DateTime _now;
+  int _batt = 0;
 
   @override
   void initState() {
     super.initState();
-    _now = DateTime.now();
-    _clock = _fmt(_now);
+    _clock = _fmt(DateTime.now());
+    _readBattery();
     Future.doWhile(() async {
       await Future.delayed(const Duration(seconds: 5));
       if (!mounted) return false;
-      _now = DateTime.now();
-      final c = _fmt(_now);
+      final c = _fmt(DateTime.now());
       if (c != _clock) setState(() => _clock = c);
       return true;
     });
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 10));
+      if (!mounted) return false;
+      _readBattery();
+      return true;
+    });
+  }
+
+  Future<void> _readBattery() async {
+    try {
+      final lvl = await Battery().batteryLevel;
+      if (mounted) setState(() => _batt = lvl);
+    } catch (_) {}
   }
 
   String _fmt(DateTime d) =>
       '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
+  Color _battColor() =>
+      _batt < 25 ? AppColors.bad : (_batt < 50 ? AppColors.warn : AppColors.ok);
+
   @override
-  Widget build(BuildContext context) => Container(
-        height: 34,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: const BoxDecoration(
-          color: AppColors.bg,
-          border: Border(bottom: BorderSide(color: AppColors.line, width: 0.5)),
-        ),
-        child: Row(
-          children: [
-            Text(_clock,
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'monospace',
-                    letterSpacing: 0.5)),
-            const Spacer(),
-            AppIcon('volume-2', size: 16, color: AppColors.txt2),
-            const SizedBox(width: 14),
-            Row(children: [
-              AppIcon('battery-full', size: 18, color: AppColors.ok),
+  Widget build(BuildContext context) {
+    final s = widget.state;
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: const BoxDecoration(
+        color: AppColors.bg,
+        border: Border(bottom: BorderSide(color: AppColors.line, width: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Text(_clock,
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'monospace',
+                  letterSpacing: 0.5)),
+          const Spacer(),
+          // 音量按钮：点击切换静音
+          InkWell(
+            onTap: s.toggleMute,
+            borderRadius: BorderRadius.circular(8),
+            child: Row(children: [
+              AppIcon(s.muted ? 'volume-x' : 'volume-2', size: 16, color: AppColors.txt2),
               const SizedBox(width: 5),
-              const Text('86%',
-                  style: TextStyle(fontSize: 12, color: AppColors.txt2)),
+              Text(s.muted ? '已静音' : '音量 ${s.volume}',
+                  style: const TextStyle(fontSize: 12, color: AppColors.txt2)),
             ]),
-            const SizedBox(width: 14),
-            Row(children: [
-              AppIcon('user', size: 15, color: AppColors.txt3),
-              const SizedBox(width: 5),
-              const Text('巡检员',
-                  style: TextStyle(fontSize: 12, color: AppColors.txt2)),
-            ]),
-          ],
-        ),
-      );
+          ),
+          const SizedBox(width: 14),
+          Row(children: [
+            AppIcon('battery-full', size: 18, color: _battColor()),
+            const SizedBox(width: 5),
+            Text('$_batt%', style: const TextStyle(fontSize: 12, color: AppColors.txt2)),
+          ]),
+          const SizedBox(width: 14),
+          Row(children: [
+            AppIcon('user', size: 15, color: AppColors.txt3),
+            const SizedBox(width: 5),
+            const Text('巡检员',
+                style: TextStyle(fontSize: 12, color: AppColors.txt2)),
+          ]),
+        ],
+      ),
+    );
+  }
 }

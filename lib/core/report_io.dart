@@ -9,13 +9,19 @@ String buildCsv(Report r) {
   late List<String> header;
   late List<List<String>> rows;
   if (r.type == 'wifi') {
-    header = ['名称', '品牌', '区域', '信号(dBm)', '距离(m)'];
+    header = ['名称', '品牌', '类型', '区域', '信号(dBm)', '距离(m)'];
     rows = r.devices.map((d) {
       d as Device;
+      final type = d.wifiType == WifiType.direct
+          ? 'WiFi Direct'
+          : d.wifiType == WifiType.sta
+              ? 'STA'
+              : 'AP';
       return [
         d.name,
         d.brand,
-        d.distance >= r.indoorThr ? '室内' : '室外',
+        type,
+        d.rssi >= r.indoorThr ? '室内' : '室外',
         d.rssi.toString(),
         d.distance.toStringAsFixed(1),
       ];
@@ -29,7 +35,7 @@ String buildCsv(Report r) {
         d.brand,
         d.category.isEmpty ? '未知' : d.category,
         d.domestic ? '国产' : '进口',
-        d.distance >= r.indoorThr ? '室内' : '室外',
+        d.rssi >= r.indoorThr ? '室内' : '室外',
         d.rssi.toString(),
         d.distance.toStringAsFixed(1),
       ];

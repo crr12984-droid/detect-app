@@ -27,7 +27,7 @@ class SettingsPage extends StatelessWidget {
               _inlineSlider(
                 icon: 'zap',
                 label: '告警阈值',
-                hint: '预计 ${rssiToDistance(state.thresholdDbm).toStringAsFixed(1)} 米',
+                hint: '信号强度高于该值触发告警',
                 value: state.thresholdDbm.toDouble(),
                 min: -90,
                 max: -40,
@@ -41,15 +41,15 @@ class SettingsPage extends StatelessWidget {
               _divider(),
               _inlineSlider(
                 icon: 'radar',
-                label: '距离设置（室内阈值）',
-                hint: '预计 ${state.indoorThr.toInt()} m 室内',
-                value: state.indoorThr,
-                min: 1,
-                max: 10,
+                label: '室内判定阈值（信号强度）',
+                hint: '信号强度 ≥ ${state.indoorThr} dBm 判为室内；末尾值为信号强度值',
+                value: state.indoorThr.toDouble(),
+                min: -90,
+                max: -30,
                 step: 1,
-                unit: 'm',
+                unit: 'dBm',
                 onChanged: (v) {
-                  state.indoorThr = v;
+                  state.indoorThr = v.round();
                   state.notify();
                 },
               ),

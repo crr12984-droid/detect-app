@@ -13,11 +13,29 @@ class DetectionPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final isWifi = state.detType == DeviceKind.wifi;
     final title = isWifi ? 'WiFi检测' : '国外设备检测';
-    final list = state.filteredList;
+    final list = state.displayList;
     final indoor = list.where((d) => state.isIndoor(d)).toList();
     final outdoor = list.where((d) => !state.isIndoor(d)).toList();
 
     return Column(children: [
+      // 顶部绿色提示（报告导出成功）
+      if (state.bannerMsg != null)
+        Container(
+          width: double.infinity,
+          color: const Color(0xFF1F8A4C),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+          child: Row(children: [
+            const Icon(Icons.check_circle, color: Colors.white, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(state.bannerMsg!,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14)),
+            ),
+          ]),
+        ),
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
         child: Row(children: [
@@ -27,8 +45,7 @@ class DetectionPage extends StatelessWidget {
               child: Text(title,
                   style: const TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w600))),
-          _textBtn(context, '报告导出', 'download',
-              () { state.exportReport(); toast(context, '导出成功'); }),
+          _textBtn(context, '报告导出', 'download', () => state.exportReport()),
           const SizedBox(width: 8),
           _scanBtn(),
         ]),
@@ -201,8 +218,18 @@ class DetectionPage extends StatelessWidget {
   Widget _group(bool indoor, String title, List<Device> items, bool isWifi,
       BuildContext ctx) {
     final flex = isWifi
-        ? [4, 3, 2, 3, 2, 2]
+        ? [4, 3, 2, 2, 3, 2, 2]
         : [4, 3, 2, 2, 3, 2, 2];
+    final cells = <Widget>[];
+    for (final d in items) {
+      cells.add(_row(flex, d, isWifi, ctx));
+      // WiFi AP 的拓扑：下挂关联 STA
+      if (isWifi &&
+          d.wifiType == WifiType.ap &&
+          d.linkedSta.isNotEmpty) {
+        cells.add(_topo(d));
+      }
+    }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -231,7 +258,7 @@ class DetectionPage extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Column(children: [
           _header(flex, isWifi),
-          ...items.map((d) => _row(flex, d, isWifi, ctx)).toList(),
+          ...cells,
         ]),
       ),
       const SizedBox(height: 8),
@@ -240,16 +267,44 @@ class DetectionPage extends StatelessWidget {
 
   Widget _header(List<int> flex, bool isWifi) {
     final labels = isWifi
-        ? ['名称', '品牌', '区域', '信号', '距离', '']
-        : ['名称', '品牌', '品类', '区域', '信号', '距离', ''];
+        ? ['名称', '品牌', '类型', '区域', '信号强度', '距离', '']
+        : ['名称', '品牌', '品类', '区域', '信号强度', '距离', ''];
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: AppColors.line))),
       child: Row(
-        children: List.generate(labels.length,
-            (i) => Expanded(flex: flex[i], child: Text(labels[i],
-                style: const TextStyle(fontSize: 12, color: AppColors.txt3)))),
+        children: List.generate(labels.length, (i) {
+          final isSig = i == 4;
+          final isDist = i == 5;
+          if (!isSig && !isDist) {
+            return Expanded(
+                flex: flex[i],
+                child: Text(labels[i],
+                    style: const TextStyle(fontSize: 12, color: AppColors.txt3)));
+          }
+          final key = isSig ? 'rssi' : 'dist';
+          final active = (isWifi ? state.wifiSortKey : state.bleSortKey) == key;
+          final dir = isWifi ? state.wifiSortDir : state.bleSortDir;
+          return Expanded(
+            flex: flex[i],
+            child: InkWell(
+              onTap: () => state.setSort(
+                  isWifi ? DeviceKind.wifi : DeviceKind.ble, key),
+              child: Row(children: [
+                Text(labels[i],
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: active ? AppColors.acc : AppColors.txt3,
+                        fontWeight:
+                            active ? FontWeight.w600 : FontWeight.normal)),
+                if (active)
+                  Text(dir < 0 ? ' ▼' : ' ▲',
+                      style: const TextStyle(fontSize: 10, color: AppColors.acc)),
+              ]),
+            ),
+          );
+        }),
       ),
     );
   }
@@ -278,17 +333,14 @@ class DetectionPage extends StatelessWidget {
       BrandLogo(d.brand, size: 14),
       const SizedBox(width: 7),
       Expanded(
-        child: Row(children: [
-          Text(d.brand,
-              style: const TextStyle(fontSize: 13),
-              overflow: TextOverflow.ellipsis),
-          if (!isWifi) ...[
-            const SizedBox(width: 6),
-            DomesticTag(d.domestic),
-          ],
-        ]),
+        child: Text(brandLabel(d.brand),
+            style: const TextStyle(fontSize: 13),
+            overflow: TextOverflow.ellipsis),
       ),
     ]);
+    final typeCell = d.wifiType == null
+        ? const SizedBox.shrink()
+        : WifiTypeTag(d.wifiType!);
     final catCell = d.category.isEmpty
         ? const Text('未知', style: TextStyle(fontSize: 12, color: AppColors.txt3))
         : Row(children: [
@@ -304,22 +356,26 @@ class DetectionPage extends StatelessWidget {
     ]);
     final distCell =
         Text('${d.distance.toStringAsFixed(1)} m', style: const TextStyle(fontSize: 12));
+
     final opCell = Row(children: [
       _opBtn('定位', 'crosshair', const Color(0xFF7EB0FF),
           () => state.openPosition(d)),
       const SizedBox(width: 6),
-      if (d.seized)
-        const Text('已查扣',
-            style: TextStyle(fontSize: 12, color: AppColors.bad, fontWeight: FontWeight.w600))
-      else
-        _opBtn('查扣', 'gavel', const Color(0xFFF08A8A), () {
-          state.detain(d);
-          toast(ctx, '已查扣：${d.name}');
-        }),
+      // WiFi 检测不提供查扣（仅国外设备检测可查扣）
+      if (!isWifi)
+        if (d.seized)
+          const Text('已查扣',
+              style: TextStyle(
+                  fontSize: 12, color: AppColors.bad, fontWeight: FontWeight.w600))
+        else
+          _opBtn('查扣', 'gavel', const Color(0xFFF08A8A), () {
+            state.detain(d);
+            toast(ctx, '已查扣：${d.name}');
+          }),
     ]);
 
     final cells = isWifi
-        ? [nameCell, brandCell, ZoneTag(indoor), signalCell, distCell, opCell]
+        ? [nameCell, brandCell, typeCell, ZoneTag(indoor), signalCell, distCell, opCell]
         : [nameCell, brandCell, catCell, ZoneTag(indoor), signalCell, distCell, opCell];
 
     return Container(
@@ -332,6 +388,63 @@ class DetectionPage extends StatelessWidget {
       ),
     );
   }
+
+  /// AP 下挂 STA 拓扑（可展开）
+  Widget _topo(Device ap) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final open = _topoOpen.contains(ap.id);
+          return Container(
+            margin: const EdgeInsets.only(left: 40, right: 12, bottom: 8),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.panel2,
+              border: Border.all(color: AppColors.line, style: BorderStyle.dashed),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(children: [
+              InkWell(
+                onTap: () => setLocal(() {
+                  if (open) {
+                    _topoOpen.remove(ap.id);
+                  } else {
+                    _topoOpen.add(ap.id);
+                  }
+                }),
+                child: Row(children: [
+                  Icon(open ? Icons.expand_less : Icons.expand_more,
+                      size: 16, color: AppColors.txt2),
+                  const SizedBox(width: 6),
+                  Text('AP 下挂 ${ap.linkedSta.length} 台 STA（点击展开）',
+                      style: const TextStyle(fontSize: 12, color: AppColors.txt2)),
+                ]),
+              ),
+              if (open)
+                ...ap.linkedSta.map((s) => Padding(
+                      padding: const EdgeInsets.only(top: 8, left: 6),
+                      child: Row(children: [
+                        Container(
+                            width: 7, height: 7, decoration: const BoxDecoration(
+                                color: Color(0xFF2E9E5B), shape: BoxShape.circle)),
+                        const SizedBox(width: 8),
+                        BrandLogo(s.brand, size: 12),
+                        const SizedBox(width: 6),
+                        Text(brandLabel(s.brand),
+                            style: const TextStyle(fontSize: 12, color: AppColors.txt2)),
+                        const SizedBox(width: 8),
+                        Text(s.mac,
+                            style: const TextStyle(
+                                fontSize: 11,
+                                color: AppColors.txt3,
+                                fontFamily: 'monospace')),
+                        const Spacer(),
+                        Text('${s.rssi} dBm',
+                            style: const TextStyle(fontSize: 11, color: AppColors.txt3)),
+                      ]),
+                    )),
+            ]),
+          );
+        },
+      );
 
   Widget _opBtn(String label, String icon, Color color, VoidCallback onTap) =>
       InkWell(
@@ -351,3 +464,6 @@ class DetectionPage extends StatelessWidget {
         ),
       );
 }
+
+/// 记录已展开的 AP 拓扑（页面级，重建不影响）
+final Set<String> _topoOpen = {};
