@@ -21,8 +21,8 @@ dependencies:
   flutter_svg: ^2.0.0
   # 报告导出写入外部存储
   path_provider: ^2.1.0
-  # 读取真实电量
-  battery_plus: ^5.0.0
+  # 读取真实电量（5.x 内部 compileSdk 固定 33，导致 AAR 元数据校验失败；6.x 起 compileSdk>=34）
+  battery_plus: ^6.0.0
 
 dev_dependencies:
   flutter_test:
