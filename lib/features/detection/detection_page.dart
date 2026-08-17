@@ -285,7 +285,7 @@ class DetectionPage extends StatelessWidget {
   Widget _row(List<int> flex, Device d, bool isWifi, BuildContext ctx) {
     final indoor = state.isIndoor(d);
     final nameCell = Row(children: [
-      CatIcon(d.category.isEmpty ? '路由器' : d.category),
+      CatIcon(d.category.isEmpty ? '' : d.category),
       const SizedBox(width: 9),
       Expanded(
         child: Column(
@@ -332,6 +332,9 @@ class DetectionPage extends StatelessWidget {
       const SizedBox(width: 6),
       Text('${d.rssi}',
           style: const TextStyle(fontSize: 12, color: AppColors.txt2)),
+      const SizedBox(width: 2),
+      const Text('dBm',
+          style: TextStyle(fontSize: 10, color: AppColors.txt3)),
     ]);
     final distCell =
         Text('${d.distance.toStringAsFixed(1)} m', style: const TextStyle(fontSize: 12));

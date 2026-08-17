@@ -52,3 +52,72 @@ Map<String, dynamic> brandFromMac(String mac) {
   final prefix = clean.substring(0, 6);
   return _oui[prefix] ?? {'brand': '未知', 'domestic': false};
 }
+
+/// 品牌 → 是否国产（与 _oui 保持一致，避免 WiFi 与 BLE 判定口径分叉）
+const Map<String, bool> _brandDomestic = {
+  'Huawei': true,
+  'Honor': true,
+  'TP-Link': true,
+  'Tenda': true,
+  'Xiaomi': true,
+  'Oppo': true,
+  'Vivo': true,
+  'OnePlus': true,
+  'realme': true,
+  'Meizu': true,
+  'ZTE': true,
+  'Lenovo': true,
+  'Apple': false,
+  'Samsung': false,
+  'Sony': false,
+  'Google': false,
+  'LG': false,
+};
+
+/// SSID 关键词 → 品牌（OUI 未命中时的补充识别）。
+/// 许多路由/热点出厂 SSID 即带品牌前缀（如 HUAWEI-XXX、Xiaomi_Guest、iPhone、DIRECT-xx），
+/// 可据此降低「未知」比例。品牌串与 _oui / _brandDomestic 保持一致。
+const Map<String, String> _ssidBrand = {
+  'HUAWEI': 'Huawei',
+  'HONOR': 'Honor',
+  'HILINK': 'Huawei',
+  'XIAOMI': 'Xiaomi',
+  'REDMI': 'Xiaomi',
+  'MI-': 'Xiaomi',
+  'OPPO': 'Oppo',
+  'VIVO': 'Vivo',
+  'REALME': 'realme',
+  'ONEPLUS': 'OnePlus',
+  'MEIZU': 'Meizu',
+  'ZTE': 'ZTE',
+  'TP-LINK': 'TP-Link',
+  'TENDA': 'Tenda',
+  'NETGEAR': 'Netgear',
+  'ASUS': 'ASUS',
+  'APPLE': 'Apple',
+  'IPHONE': 'Apple',
+  'IPAD': 'Apple',
+  'SAMSUNG': 'Samsung',
+  'GALAXY': 'Samsung',
+  'SONY': 'Sony',
+  'GOOGLE': 'Google',
+  'PIXEL': 'Google',
+  'LG-': 'LG',
+  'LEN': 'Lenovo',
+  'MIWIFI': 'Xiaomi',
+  'CMCC': 'ChinaMobile',
+};
+
+/// SSID 品牌识别：返回 {'brand','domestic'}。命中返回品牌，未命中返回未知。
+Map<String, dynamic> brandFromSsid(String ssid) {
+  final s = ssid.toUpperCase();
+  String? brand;
+  for (final k in _ssidBrand.keys) {
+    if (s.contains(k)) {
+      brand = _ssidBrand[k];
+      break;
+    }
+  }
+  if (brand == null) return {'brand': '未知', 'domestic': false};
+  return {'brand': brand, 'domestic': _brandDomestic[brand] ?? false};
+}

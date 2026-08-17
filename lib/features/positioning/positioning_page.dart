@@ -90,13 +90,6 @@ class PositioningPage extends StatelessWidget {
               const SizedBox(height: 12),
               _signalMeter(d.rssi),
               const SizedBox(height: 6),
-              Text(state.isIndoor(d) ? '室内' : '室外',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: state.isIndoor(d)
-                          ? const Color(0xFF8FB6FF)
-                          : const Color(0xFF5FCA86),
-                      fontWeight: FontWeight.w600)),
             ]),
           ),
       );
@@ -195,8 +188,9 @@ class PositioningPage extends StatelessWidget {
         Text(label, style: const TextStyle(fontSize: 11.5, color: AppColors.txt2)),
       ]);
 
-  /// 信号详情（紧凑 3 列，缩小行间距）
+  /// 信号详情（紧凑 3 列，缩小行间距）；字段顺序与原型一致
   Widget _detailGrid(Device d, bool isWifi) {
+    final first = _fmtTime(d.firstSeen);
     final rows = isWifi
         ? [
             ['名称', d.name],
@@ -209,16 +203,18 @@ class PositioningPage extends StatelessWidget {
             ['区域', state.isIndoor(d) ? '室内' : '室外'],
             ['距离', '${d.distance.toStringAsFixed(1)} m'],
             ['加密', d.info ?? '—'],
-            ['最大信号', '${state.maxRssi.round()}'],
+            ['信道', d.channel != null ? 'CH ${d.channel}' : '—'],
+            ['发现时间', first],
             ['发现次数', '${d.seen} 次'],
-            ['BSSID', d.id],
+            ['MAC', d.id],
           ]
         : [
             ['名称', d.name],
-            ['品牌', brandLabel(d.brand)],
+            ['品牌', '${brandLabel(d.brand)}${d.domestic ? '（国产）' : '（进口）'}'],
             ['品类', d.category.isEmpty ? '未知' : d.category],
             ['区域', state.isIndoor(d) ? '室内' : '室外'],
             ['距离', '${d.distance.toStringAsFixed(1)} m'],
+            ['发现时间', first],
             ['发现次数', '${d.seen} 次'],
             ['MAC', d.id],
           ];
@@ -235,6 +231,9 @@ class PositioningPage extends StatelessWidget {
       itemBuilder: (_, i) => _drow(rows[i][0], rows[i][1]),
     );
   }
+
+  String _fmtTime(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}';
 
   Widget _drow(String k, String v) => Container(
         padding: const EdgeInsets.symmetric(vertical: 6),

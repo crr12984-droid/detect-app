@@ -167,6 +167,31 @@ class _StatusBarState extends State<StatusBar> {
   Color _battColor() =>
       _batt < 25 ? AppColors.bad : (_batt < 50 ? AppColors.warn : AppColors.ok);
 
+  void _confirmLogout(BuildContext ctx) {
+    showDialog(
+      context: ctx,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.panel,
+        title: const Text('退出登录', style: TextStyle(color: AppColors.txt)),
+        content: const Text('确定要退出当前管理员账号？',
+            style: TextStyle(color: AppColors.txt2)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消', style: TextStyle(color: AppColors.txt2)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              widget.state.logout();
+            },
+            child: const Text('确定', style: TextStyle(color: AppColors.bad)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _toggleVolume() {
     if (_volEntry != null) {
       _closeVolume();
@@ -240,12 +265,16 @@ class _StatusBarState extends State<StatusBar> {
             Text('$_batt%', style: const TextStyle(fontSize: 12, color: AppColors.txt2)),
           ]),
           const SizedBox(width: 14),
-          Row(children: [
-            AppIcon('user', size: 15, color: AppColors.txt3),
-            const SizedBox(width: 5),
-            const Text('巡检员',
-                style: TextStyle(fontSize: 12, color: AppColors.txt2)),
-          ]),
+          InkWell(
+            onTap: () => _confirmLogout(context),
+            borderRadius: BorderRadius.circular(8),
+            child: Row(children: [
+              AppIcon('user', size: 15, color: AppColors.txt2),
+              const SizedBox(width: 5),
+              const Text('管理员',
+                  style: TextStyle(fontSize: 12, color: AppColors.txt2)),
+            ]),
+          ),
         ],
       ),
     );

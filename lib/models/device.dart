@@ -26,6 +26,7 @@ class Device {
   bool seized; // 是否被查扣
   final String? model; // 精确型号（名称带出或连接后读 DIS 获得）
   final WifiType? wifiType; // 仅 WiFi：AP / STA / Direct
+  final int? channel; // 仅 WiFi：信道（由频率换算）
   final List<StaLink> linkedSta; // 仅 WiFi AP：下挂关联终端
   final DateTime firstSeen;
   DateTime lastSeen;
@@ -43,6 +44,7 @@ class Device {
     this.seized = false,
     this.model,
     this.wifiType,
+    this.channel,
     this.linkedSta = const [],
     DateTime? firstSeen,
     DateTime? lastSeen,
@@ -63,6 +65,7 @@ class Device {
           String? name,
           String? model,
           WifiType? wifiType,
+          int? channel,
           List<StaLink>? linkedSta}) =>
       Device(
         kind: kind,
@@ -76,10 +79,60 @@ class Device {
         seized: seized ?? this.seized,
         model: model ?? this.model,
         wifiType: wifiType ?? this.wifiType,
+        channel: channel ?? this.channel,
         linkedSta: linkedSta ?? this.linkedSta,
         firstSeen: firstSeen,
         lastSeen: DateTime.now(),
         seen: seen ?? this.seen,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind.name,
+        'id': id,
+        'name': name,
+        'brand': brand,
+        'domestic': domestic,
+        'rssi': rssi,
+        'info': info,
+        'category': category,
+        'seized': seized,
+        'model': model,
+        'wifiType': wifiType?.name,
+        'channel': channel,
+        'linkedSta': linkedSta
+            .map((s) => {'mac': s.mac, 'brand': s.brand, 'rssi': s.rssi})
+            .toList(),
+        'firstSeen': firstSeen.toIso8601String(),
+        'lastSeen': lastSeen.toIso8601String(),
+        'seen': seen,
+      };
+
+  factory Device.fromJson(Map<String, dynamic> j) => Device(
+        kind: DeviceKind.values.byName(j['kind'] as String),
+        id: j['id'] as String,
+        name: j['name'] as String,
+        brand: j['brand'] as String,
+        domestic: j['domestic'] as bool,
+        rssi: j['rssi'] as int,
+        info: j['info'] as String?,
+        category: (j['category'] as String?) ?? '',
+        seized: (j['seized'] as bool?) ?? false,
+        model: j['model'] as String?,
+        wifiType: j['wifiType'] == null
+            ? null
+            : WifiType.values.byName(j['wifiType'] as String),
+        channel: j['channel'] as int?,
+        linkedSta: (j['linkedSta'] as List?)
+                ?.map((e) => StaLink(
+                      mac: (e as Map)['mac'] as String,
+                      brand: (e)['brand'] as String,
+                      rssi: (e)['rssi'] as int,
+                    ))
+                .toList() ??
+            const [],
+        firstSeen: DateTime.parse(j['firstSeen'] as String),
+        lastSeen: DateTime.parse(j['lastSeen'] as String),
+        seen: (j['seen'] as int?) ?? 1,
       );
 }
 

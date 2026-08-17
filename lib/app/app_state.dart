@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/device.dart';
 import '../models/report.dart';
 import '../core/wifi_scanner.dart';
 import '../core/ble_scanner.dart';
 import '../core/device_classifier.dart';
+import '../core/permissions.dart';
 
 /// 全局应用状态：导航、扫描、定位、报告、设置。
 /// 由 AppShell 持有并注入各界面；任何变更调用 notify() 触发重建。
@@ -43,6 +47,7 @@ class AppState {
   double maxRssi = -35;
   double dir = 0;
   Timer? _posTimer;
+  int _prevRssi = -100; // 上一次 tick 的信号值，用于信号增强提示音
 
   // 列表排序：信号强度 / 距离，可点击切换升/降序
   String wifiSortKey = 'rssi';
@@ -55,6 +60,22 @@ class AppState {
 
   VoidCallback? onChanged;
   bool _alive = true;
+
+  AppState() {
+    loadReports();
+  }
+
+  /// 退出登录：停止扫描与定位、清空追踪目标、回到登录页
+  void logout() {
+    stopScan();
+    stopPosition();
+    tracked = null;
+    trend = [];
+    authed = false;
+    overlay = null;
+    section = 0;
+    notify();
+  }
 
   // 蓝牙列表筛选：all / foreign / apple / seized
   String btFilter = 'all';
@@ -128,6 +149,15 @@ class AppState {
     detType = type;
     overlay = 'detection';
     notify();
+    // 申请扫描所需权限（蓝牙扫描/连接 + 定位），并确认定位服务已开启。
+    // 普通安卓权限无法 monitor-mode 嗅探，未授权时扫描将返回空。
+    final granted = await ensureScanPermissions();
+    final locOn = await isLocationServiceEnabled();
+    if (!granted || !locOn) {
+      showBanner(locOn
+          ? '扫描需要蓝牙与定位权限，请授予后重试'
+          : '请先在系统设置中开启定位服务');
+    }
     await startScan();
   }
 
@@ -225,6 +255,7 @@ class AppState {
     stopScan();
     tracked = d;
     maxRssi = d.rssi.toDouble();
+    _prevRssi = d.rssi;
     dir = (DateTime.now().millisecondsSinceEpoch % 360).toDouble();
     trend = List.generate(60, (_) => d.rssi);
     overlay = 'position';
@@ -248,8 +279,9 @@ class AppState {
     dir = (dir + (Random().nextDouble() * 10 - 5) + 360) % 360;
     trend.add(nr);
     if (trend.length > 60) trend.removeAt(0);
-    // 声音提示：信号强时急促
-    if (sound && nr >= indoorThr) _beep(nr >= -45 ? 3 : 2);
+    // 声音提示：信号增强（变强 ≥3dBm）时短促提示音，便于靠近目标时定位
+    if (sound && nr - _prevRssi >= 3) _beep(3);
+    _prevRssi = nr;
     notify();
   }
 
@@ -356,7 +388,32 @@ class AppState {
           devices: list.map((d) => d.copyWith()).toList(),
           indoorThr: indoorThr,
         ));
+    saveReports();
     showBanner('报告已导出');
+  }
+
+  /// 从本地文件载入已导出报告（应用启动与构造时调用）
+  static const String _reportsFile = 'reports.json';
+  Future<void> loadReports() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final f = File('${dir.path}/$_reportsFile');
+      if (await f.exists()) {
+        final txt = await f.readAsString();
+        final list = jsonDecode(txt) as List;
+        reports = list.map((e) => Report.fromJson(e as Map<String, dynamic>)).toList();
+        notify();
+      }
+    } catch (_) {}
+  }
+
+  /// 将当前报告列表持久化到本地文件
+  Future<void> saveReports() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final f = File('${dir.path}/$_reportsFile');
+      await f.writeAsString(jsonEncode(reports.map((r) => r.toJson()).toList()));
+    } catch (_) {}
   }
 
   void showBanner(String msg) {
@@ -377,6 +434,7 @@ class AppState {
 
   void deleteReport(int id) {
     reports.removeWhere((r) => r.id == id);
+    saveReports();
     notify();
   }
 

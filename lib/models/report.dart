@@ -1,3 +1,5 @@
+import 'device.dart';
+
 class Report {
   final int id;
   final String name;
@@ -20,4 +22,30 @@ class Report {
     this.indoorThr = -60,
     this.remark = '',
   });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'label': label,
+        'type': type,
+        'time': time,
+        'count': count,
+        'devices': devices.map((d) => (d as Device).toJson()).toList(),
+        'indoorThr': indoorThr,
+        'remark': remark,
+      };
+
+  factory Report.fromJson(Map<String, dynamic> j) => Report(
+        id: j['id'] as int,
+        name: j['name'] as String,
+        label: j['label'] as String,
+        type: j['type'] as String,
+        time: j['time'] as String,
+        count: j['count'] as int,
+        devices: (j['devices'] as List)
+            .map((d) => Device.fromJson(d as Map<String, dynamic>))
+            .toList(),
+        indoorThr: (j['indoorThr'] as int?) ?? -60,
+        remark: (j['remark'] as String?) ?? '',
+      );
 }

@@ -23,7 +23,10 @@ class WifiScanner {
     }
     final map = <String, Device>{};
     for (final ap in aps) {
-      final b = brandFromMac(ap.bssid);
+      // 优先按 OUI 识别，未命中再按 SSID 品牌关键词补充，降低「未知」比例
+      final oui = brandFromMac(ap.bssid);
+      final b =
+          oui['brand'] == '未知' ? brandFromSsid(ap.ssid) : oui;
       final id = ap.bssid.toUpperCase();
       final ssidUp = ap.ssid.toUpperCase();
       final isDirect = ssidUp.contains('DIRECT') || ssidUp.contains('WIFI_DIRECT');
@@ -39,8 +42,22 @@ class WifiScanner {
         category: '路由器',
         seized: false,
         wifiType: type,
+        channel: channelFromFrequency(ap.frequency),
       );
     }
     return map.values.toList();
   }
+}
+
+/// 由 WiFi 频率换算信道号：2.4G(1-13/14)、5G(UNII)、6G。
+int? channelFromFrequency(int? freq) {
+  if (freq == null) return null;
+  if (freq >= 2412 && freq <= 2484) {
+    if (freq == 2484) return 14;
+    return (freq - 2412) ~/ 5 + 1;
+  }
+  if (freq >= 4915 && freq <= 4980) return (freq - 4915) ~/ 5 + 183;
+  if (freq >= 5035 && freq <= 5980) return (freq - 5000) ~/ 5;
+  if (freq >= 5955 && freq <= 7115) return (freq - 5950) ~/ 5;
+  return null;
 }

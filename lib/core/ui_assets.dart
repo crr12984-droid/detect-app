@@ -62,7 +62,7 @@ Color catColor(String cat) {
 
 String catIcon(String cat) {
   final v = _catVisual[cat];
-  return (v?['icon'] as String?) ?? 'laptop';
+  return (v?['icon'] as String?) ?? 'device';
 }
 
 /// 品牌展示名：未知时明确标识
@@ -138,15 +138,21 @@ class WifiTypeTag extends StatelessWidget {
 }
 
 /// 品类图标（手机/手表/耳机/平板/车载/路由器）。
+/// 空品类（多为 BLE 未广播类别的设备）回退到通用「设备」图标，而非 WiFi/路由器图标。
 class CatIcon extends StatelessWidget {
   final String cat;
   final double size;
   const CatIcon(this.cat, {this.size = 14});
   @override
-  Widget build(BuildContext context) => SvgPicture.asset(
-        'assets/icons/${catIcon(cat)}.svg',
-        width: size, height: size, color: catColor(cat),
-      );
+  Widget build(BuildContext context) {
+    final icon = cat.isEmpty ? 'device' : catIcon(cat);
+    return SvgPicture.asset(
+      'assets/icons/$icon.svg',
+      width: size,
+      height: size,
+      color: catColor(cat),
+    );
+  }
 }
 
 /// 通用 UI 图标（来自 assets/icons/，如 arrow-left / settings / refresh-cw …）。

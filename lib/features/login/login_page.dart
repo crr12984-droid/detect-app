@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
+import '../../core/ui_assets.dart';
 
 /// 登录界面：账号 admin / 密码 chenjian。
 class LoginPage extends StatefulWidget {
@@ -13,6 +14,7 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _acc = TextEditingController(text: 'admin');
   final _pwd = TextEditingController(text: 'chenjian');
+  bool _pwdHidden = true;
   String? _err;
 
   void _submit() {
@@ -55,11 +57,7 @@ class _LoginPageState extends State<LoginPage> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   alignment: Alignment.center,
-                  child: const Text('检',
-                      style: TextStyle(
-                          fontSize: 34,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white)),
+                  child: AppIcon('radar', size: 46, color: Colors.white),
                 ),
                 const SizedBox(height: 18),
                 const Text('智能终端检测定位系统',
@@ -70,7 +68,7 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 24),
                 _field(_acc, '账号', false),
                 const SizedBox(height: 12),
-                _field(_pwd, '密码', true),
+                _field(_pwd, '密码', _pwdHidden, isPwd: true),
                 const SizedBox(height: 8),
                 if (_err != null)
                   Text(_err!,
@@ -93,36 +91,48 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                const Text('默认账号 admin / 密码 chenjian',
-                    style: TextStyle(fontSize: 12, color: AppColors.txt3)),
               ]),
             ),
           ),
         ),
       );
 
-  Widget _field(TextEditingController c, String hint, bool pwd) => TextField(
-        controller: c,
-        obscureText: pwd,
-        style: const TextStyle(color: AppColors.txt),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: const TextStyle(color: AppColors.txt3),
-          filled: true,
-          fillColor: AppColors.panel2,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: AppColors.line),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: AppColors.line),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: AppColors.acc),
-          ),
+  Widget _field(TextEditingController c, String hint, bool obscure,
+      {bool isPwd = false}) {
+    return TextField(
+      controller: c,
+      obscureText: obscure,
+      style: const TextStyle(color: AppColors.txt),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: AppColors.txt3),
+        filled: true,
+        fillColor: AppColors.panel2,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        suffixIcon: isPwd
+            ? InkWell(
+                onTap: () => setState(() => _pwdHidden = !_pwdHidden),
+                borderRadius: BorderRadius.circular(20),
+                child: AppIcon(
+                  _pwdHidden ? 'eye' : 'eye-off',
+                  size: 18,
+                  color: AppColors.txt3,
+                ),
+              )
+            : null,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: AppColors.line),
         ),
-      );
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: AppColors.line),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: AppColors.acc),
+        ),
+      ),
+    );
+  }
 }
