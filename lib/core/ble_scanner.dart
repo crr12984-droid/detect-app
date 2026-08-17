@@ -20,19 +20,28 @@ class BleScanner {
       final mac = r.device.remoteId.str.toUpperCase();
       _devices[mac] = r.device;
       final adv = r.advertisementData;
-      final name = r.device.platformName.isNotEmpty
-          ? r.device.platformName
-          : (adv.advName.isNotEmpty ? adv.advName : '');
       final companyId = adv.manufacturerData.isNotEmpty
           ? adv.manufacturerData.keys.first
           : null;
       final uuids = adv.serviceUuids.map((g) => g.str).toList();
+      // 优先取广播名称：平台名 → 本地名(localName) → 旧 advName
+      final advName = r.device.platformName.isNotEmpty
+          ? r.device.platformName
+          : (adv.localName.isNotEmpty
+              ? adv.localName
+              : (adv.advName.isNotEmpty ? adv.advName : ''));
       final id = classifyBle(
-          mac: mac, name: name, companyId: companyId, serviceUuids: uuids);
+          mac: mac, name: advName, companyId: companyId, serviceUuids: uuids);
+      // 无广播名称时，用「品牌+品类」兜底展示，避免整列“未知设备”
+      final name = advName.isNotEmpty
+          ? advName
+          : (id.brand != '未知' && id.category.isNotEmpty
+              ? '${id.brand} ${id.category}'
+              : (id.brand != '未知' ? id.brand : '(未知设备)'));
       return Device(
         kind: DeviceKind.ble,
         id: mac,
-        name: name.isEmpty ? '(未知设备)' : name,
+        name: name,
         brand: id.brand,
         domestic: id.domestic,
         rssi: r.rssi,

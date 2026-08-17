@@ -295,20 +295,25 @@ class AppState {
     }
   }
 
-  // ---------- 精确型号（连接后读 GATT 设备信息服务 0x180A） ----------
+  // ---------- 精确型号/名称（连接后读 GATT 设备信息服务 0x180A） ----------
   Future<void> _maybeResolveModels() async {
     if (_resolving) return;
     for (final d in ble) {
+      // 名称未知或型号未知时，连接读取真实型号/设备名（每次扫描间隙只尝试一台）
+      final nameUnknown =
+          d.name.isEmpty || d.name.contains('未知设备') || d.name == '(未知设备)';
       if (d.model == null &&
           !_modelTried.contains(d.id) &&
-          (d.brand == 'Apple' || d.brand == '未知')) {
+          (d.brand == 'Apple' ||
+              d.brand == '未知' ||
+              nameUnknown)) {
         _modelTried.add(d.id);
         _resolving = true;
         try {
           await resolveModel(d);
         } catch (_) {}
         _resolving = false;
-        return; // 每次扫描间隙只尝试一台，避免拖慢刷新
+        return;
       }
     }
   }
@@ -321,24 +326,36 @@ class AppState {
       await bd.connect(timeout: const Duration(seconds: 4));
       final services = await bd.discoverServices();
       String? model;
+      String? devName;
       for (final s in services) {
         if (!s.uuid.str.toUpperCase().contains('180A')) continue;
         for (final c in s.characteristics) {
-          if (c.uuid.str.toUpperCase().contains('2A24')) {
+          final u = c.uuid.str.toUpperCase();
+          if (u.contains('2A24')) {
             model = String.fromCharCodes(await c.read()).trim();
-            break;
+          } else if (u.contains('2A00')) {
+            devName = String.fromCharCodes(await c.read()).trim();
           }
         }
       }
       await bd.disconnect();
-      if (model != null && model.isNotEmpty) {
-        final pretty = appleMarketingName(model);
-        final i = ble.indexWhere((x) => x.id == d.id);
-        if (i >= 0) {
-          ble[i] = ble[i].copyWith(model: pretty);
-          notify();
-        }
-      }
+      final i = ble.indexWhere((x) => x.id == d.id);
+      if (i < 0) return;
+      final pretty = model != null && model!.isNotEmpty
+          ? appleMarketingName(model!)
+          : null;
+      // 仅当当前名称为兜底（未知/品牌品类拼接）时用 GATT 设备名覆盖
+      final cur = ble[i].name;
+      final nameUnknown = cur.isEmpty ||
+          cur == '(未知设备)' ||
+          cur.contains('未知设备') ||
+          (cur.contains(ble[i].brand) && cur.contains(ble[i].category));
+      final newName = (devName != null && devName!.isNotEmpty && nameUnknown)
+          ? devName!
+          : null;
+      ble[i] = ble[i].copyWith(
+          model: pretty, name: newName ?? ble[i].name);
+      notify();
     } catch (_) {
       // 未配对/连接失败：保持类别识别结果
     }

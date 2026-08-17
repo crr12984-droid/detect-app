@@ -30,7 +30,7 @@ const Map<String, Map<String, dynamic>> _brandVisual = {
   'tcl': {'color': 0xFFE2231A, 'logo': false},
 };
 
-/// 品类视觉：颜色 + 图标资源名（assets/icons/，缺失回退 laptop）。
+/// 品类视觉：颜色 + 图标资源名（assets/icons/，缺失回退 device）。
 const Map<String, Map<String, dynamic>> _catVisual = {
   '手机': {'color': 0xFF3B82F6, 'icon': 'smartphone'},
   '手表': {'color': 0xFF8B5CF6, 'icon': 'watch'},
@@ -38,6 +38,11 @@ const Map<String, Map<String, dynamic>> _catVisual = {
   '平板': {'color': 0xFFF59E0B, 'icon': 'tablet'},
   '车载': {'color': 0xFF10B981, 'icon': 'car'},
   '路由器': {'color': 0xFF64748B, 'icon': 'wifi'},
+  '鼠标': {'color': 0xFFE879F9, 'icon': 'mouse'},
+  '键盘': {'color': 0xFFA78BFA, 'icon': 'keyboard'},
+  '音箱': {'color': 0xFF34D399, 'icon': 'speaker'},
+  '电视': {'color': 0xFFF472B6, 'icon': 'tv'},
+  '笔电': {'color': 0xFF60A5FA, 'icon': 'laptop'},
 };
 
 /// 品牌 key 归一化：小写并去掉连字符等非字母数字（如 "TP-Link" → "tplink"），

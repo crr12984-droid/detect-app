@@ -91,7 +91,10 @@ String? _brandFromName(String n) {
   }
   if (n.contains('huawei')) return 'Huawei';
   if (n.contains('honor')) return 'Honor';
-  if (n.contains('redmi') || n.contains('xiaomi') || n.contains('mi band')) {
+  if (n.startsWith('mi ') ||
+      n.contains('xiaomi') ||
+      n.contains('redmi') ||
+      n.contains('mi band')) {
     return 'Xiaomi';
   }
   if (n.contains('samsung') || n.contains('galaxy')) return 'Samsung';
@@ -131,6 +134,25 @@ String _categoryFromName(String n) {
       n.contains('平板')) {
     return '平板';
   }
+  if (n.contains('mouse') || n.contains('鼠标')) return '鼠标';
+  if (n.contains('keyboard') || n.contains('键盘')) return '键盘';
+  if (n.contains('speaker') ||
+      n.contains('音箱') ||
+      n.contains('音响') ||
+      n.contains('soundbar')) {
+    return '音箱';
+  }
+  if (n.contains('tv') || n.contains('电视') || n.contains('smarttv')) {
+    return '电视';
+  }
+  if (n.contains('laptop') ||
+      n.contains('笔记本') ||
+      n.contains('电脑') ||
+      n.contains('macbook') ||
+      n.contains(' pc') ||
+      n.contains('pc ')) {
+    return '笔电';
+  }
   if (n.contains('iphone') ||
       n.contains('phone') ||
       n.contains('手机') ||
@@ -139,7 +161,8 @@ String _categoryFromName(String n) {
       n.contains('pixel') ||
       n.contains('mate') ||
       n.contains('p40') ||
-      n.contains('p50')) {
+      n.contains('p50') ||
+      n.startsWith('mi ')) {
     return '手机';
   }
   if (n.contains('car') || n.contains('车载')) return '车载';
@@ -164,11 +187,33 @@ String? _modelFromName(String name) {
 }
 
 // ---------- Service UUID → 类别 ----------
+/// BLE 广播的 Service UUID 是识别品类的可靠补充（尤其当设备未广播名称时）。
+/// 优先级：音频类→耳机，HID(键鼠)→鼠标，心率/运动健康→手表，生态 beacon→手机。
+/// 注意 HID(1810/1812/1813) 与部分健康 UUID 同处 181x 段，必须放在健康段之前判断。
 String _categoryFromServices(List<String> uuids) {
   final set = uuids.map((u) => u.toLowerCase().replaceAll('-', '')).toSet();
-  if (set.any((u) => u.contains('fd6f'))) return '手机'; // Apple Continuity
-  if (set.any((u) => u.contains('180d'))) return '手表'; // Heart Rate
-  if (set.any((u) => u.contains('fe95'))) return '手机'; // 小米生态
-  if (set.any((u) => u.contains('feaa'))) return '手机'; // Google Eddystone
+  final has = (String p) => set.any((u) => u.contains(p));
+  // 经典/低功耗音频
+  const audio = {
+    '1108', '110a', '110b', '111e',
+    '184b', '184c', '184d', '184e', '184f',
+    '1850', '1851', '1852', '1853', '1854', '1855', '1856', '1857', '1858', '1859',
+    '185a', '185b', '185c', '185d', '185e', '185f',
+  };
+  // HID（键盘/鼠标等外设）
+  const hid = {'1810', '1812', '1813'};
+  // 心率 / 运动健康 / 体重等穿戴
+  const health = {
+    '180d', '1814', '1816', '1808', '1809', '181c', '181d', '1821', '1822',
+    '1811', '1815', '1817', '1818', '1819', '181a', '181b', '181f', '1820',
+    '1823', '1824', '1825', '1826', '1827', '1828', '1829', '182a', '182b',
+    '182c', '182d', '182e', '182f', '1830',
+  };
+  if (audio.any(has)) return '耳机';
+  if (hid.any(has)) return '鼠标';
+  if (health.any(has)) return '手表';
+  if (has('fd6f')) return '手机'; // Apple Continuity
+  if (has('fe95')) return '手机'; // 小米生态
+  if (has('feaa')) return '手机'; // Google Eddystone
   return '';
 }

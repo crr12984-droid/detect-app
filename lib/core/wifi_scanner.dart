@@ -23,10 +23,11 @@ class WifiScanner {
     }
     final map = <String, Device>{};
     for (final ap in aps) {
-      // 优先按 OUI 识别，未命中再按 SSID 品牌关键词补充，降低「未知」比例
-      final oui = brandFromMac(ap.bssid);
-      final b =
-          oui['brand'] == '未知' ? brandFromSsid(ap.ssid) : oui;
+      // AP 的 SSID 通常直接带品牌前缀（HUAWEI-/CMCC-/TP-LINK_/Xiaomi_ 等），优先用
+      // SSID 识别；SSID 无品牌信息（如 "ZFinfo"）再回退 OUI（路由器 BSSID 为真实 MAC，
+      // 未随机化，12k+ 条 OUI 库可稳定命中）。
+      final ssidB = brandFromSsid(ap.ssid);
+      final b = ssidB['brand'] == '未知' ? brandFromMac(ap.bssid) : ssidB;
       final id = ap.bssid.toUpperCase();
       final ssidUp = ap.ssid.toUpperCase();
       final isDirect = ssidUp.contains('DIRECT') || ssidUp.contains('WIFI_DIRECT');
