@@ -24,12 +24,10 @@ class BleScanner {
           ? adv.manufacturerData.keys.first
           : null;
       final uuids = adv.serviceUuids.map((g) => g.str).toList();
-      // 优先取广播名称：平台名 → 本地名(localName) → 旧 advName
+      // 优先取广播名称：平台名 → 广播 advName
       final advName = r.device.platformName.isNotEmpty
           ? r.device.platformName
-          : (adv.localName.isNotEmpty
-              ? adv.localName
-              : (adv.advName.isNotEmpty ? adv.advName : ''));
+          : (adv.advName.isNotEmpty ? adv.advName : '');
       final id = classifyBle(
           mac: mac, name: advName, companyId: companyId, serviceUuids: uuids);
       // 无广播名称时，用「品牌+品类」兜底展示，避免整列“未知设备”

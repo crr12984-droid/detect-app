@@ -341,8 +341,8 @@ class AppState {
       await bd.disconnect();
       final i = ble.indexWhere((x) => x.id == d.id);
       if (i < 0) return;
-      final pretty = model != null && model!.isNotEmpty
-          ? appleMarketingName(model!)
+      final pretty = model != null && model.isNotEmpty
+          ? appleMarketingName(model)
           : null;
       // 仅当当前名称为兜底（未知/品牌品类拼接）时用 GATT 设备名覆盖
       final cur = ble[i].name;
@@ -350,8 +350,8 @@ class AppState {
           cur == '(未知设备)' ||
           cur.contains('未知设备') ||
           (cur.contains(ble[i].brand) && cur.contains(ble[i].category));
-      final newName = (devName != null && devName!.isNotEmpty && nameUnknown)
-          ? devName!
+      final newName = (devName != null && devName.isNotEmpty && nameUnknown)
+          ? devName
           : null;
       ble[i] = ble[i].copyWith(
           model: pretty, name: newName ?? ble[i].name);

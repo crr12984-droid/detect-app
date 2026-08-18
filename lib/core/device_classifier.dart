@@ -192,7 +192,7 @@ String? _modelFromName(String name) {
 /// 注意 HID(1810/1812/1813) 与部分健康 UUID 同处 181x 段，必须放在健康段之前判断。
 String _categoryFromServices(List<String> uuids) {
   final set = uuids.map((u) => u.toLowerCase().replaceAll('-', '')).toSet();
-  final has = (String p) => set.any((u) => u.contains(p));
+  bool has(String p) => set.any((u) => u.contains(p));
   // 经典/低功耗音频
   const audio = {
     '1108', '110a', '110b', '111e',
