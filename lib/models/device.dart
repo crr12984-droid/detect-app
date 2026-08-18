@@ -5,6 +5,21 @@ enum DeviceKind { wifi, ble }
 /// WiFi 设备类型（用于 AP / STA / WiFi Direct 区分与拓扑展示）
 enum WifiType { ap, sta, direct }
 
+/// 蓝牙无线电类型（由广播 Flags 判定：低功耗 / 经典 / 双模）
+enum RadioType { lowEnergy, classic, dual }
+
+/// 无线电类型显示名
+String radioTypeLabel(RadioType t) {
+  switch (t) {
+    case RadioType.lowEnergy:
+      return '低功耗蓝牙';
+    case RadioType.classic:
+      return '经典蓝牙';
+    case RadioType.dual:
+      return '双模蓝牙';
+  }
+}
+
 /// AP 下挂的关联终端（拓扑展示用）
 class StaLink {
   final String mac;
@@ -23,8 +38,11 @@ class Device {
   final int rssi; // 实时信号强度 dBm（真实）
   final String? info; // WiFi: 加密方式；BLE: 可选
   final String category; // 路由器 / 手机 / 手表 / 耳机 / 平板 / 车载 / ''未知
+  final RadioType radioType; // 蓝牙类型：低功耗蓝牙 / 经典蓝牙 / 双模蓝牙
   bool seized; // 是否被查扣
   final String? model; // 精确型号（名称带出或连接后读 DIS 获得）
+  final int? txPower; // 广播 Tx Power Level(dBm)，用于路径损耗测距
+  final String? serial; // GATT 设备信息服务 0x2A25 序列号（设备唯一指纹/去重）
   final WifiType? wifiType; // 仅 WiFi：AP / STA / Direct
   final int? channel; // 仅 WiFi：信道（由频率换算）
   final List<StaLink> linkedSta; // 仅 WiFi AP：下挂关联终端
@@ -41,8 +59,11 @@ class Device {
     required this.rssi,
     this.info,
     this.category = '',
+    this.radioType = RadioType.lowEnergy,
     this.seized = false,
     this.model,
+    this.txPower,
+    this.serial,
     this.wifiType,
     this.channel,
     this.linkedSta = const [],
@@ -64,6 +85,12 @@ class Device {
           bool? seized,
           String? name,
           String? model,
+          String? brand,
+          bool? domestic,
+          String? category,
+          RadioType? radioType,
+          int? txPower,
+          String? serial,
           WifiType? wifiType,
           int? channel,
           List<StaLink>? linkedSta}) =>
@@ -71,13 +98,16 @@ class Device {
         kind: kind,
         id: id,
         name: name ?? this.name,
-        brand: brand,
-        domestic: domestic,
+        brand: brand ?? this.brand,
+        domestic: domestic ?? this.domestic,
         rssi: rssi ?? this.rssi,
         info: info,
-        category: category,
+        category: category ?? this.category,
+        radioType: radioType ?? this.radioType,
         seized: seized ?? this.seized,
         model: model ?? this.model,
+        txPower: txPower ?? this.txPower,
+        serial: serial ?? this.serial,
         wifiType: wifiType ?? this.wifiType,
         channel: channel ?? this.channel,
         linkedSta: linkedSta ?? this.linkedSta,
@@ -95,8 +125,11 @@ class Device {
         'rssi': rssi,
         'info': info,
         'category': category,
+        'radioType': radioType.name,
         'seized': seized,
         'model': model,
+        'txPower': txPower,
+        'serial': serial,
         'wifiType': wifiType?.name,
         'channel': channel,
         'linkedSta': linkedSta
@@ -116,8 +149,12 @@ class Device {
         rssi: j['rssi'] as int,
         info: j['info'] as String?,
         category: (j['category'] as String?) ?? '',
+        radioType: RadioType.values
+            .byName((j['radioType'] as String?) ?? 'lowEnergy'),
         seized: (j['seized'] as bool?) ?? false,
         model: j['model'] as String?,
+        txPower: j['txPower'] as int?,
+        serial: j['serial'] as String?,
         wifiType: j['wifiType'] == null
             ? null
             : WifiType.values.byName(j['wifiType'] as String),

@@ -1,5 +1,6 @@
 import 'company_db.dart';
 import 'brand_db.dart';
+import '../models/device.dart';
 
 /// BLE 广播数据的识别结果
 class BleId {
@@ -7,11 +8,17 @@ class BleId {
   final bool domestic;
   final String category; // 手机 / 手表 / 耳机 / 平板 / 车载 / 路由器 / ''未知
   final String? model; // 名称中带出的型号（如 "iPhone 15"、"AirPods Pro"）
+  final int? appearance; // 广播 0x19 / GATT 0x2A01 外观值
+  final int? flags; // 广播 0x01 Flags
+  final int? txPower; // 广播 0x0A Tx Power(dBm)
   const BleId({
     required this.brand,
     required this.domestic,
     required this.category,
     this.model,
+    this.appearance,
+    this.flags,
+    this.txPower,
   });
 }
 
@@ -23,6 +30,9 @@ BleId classifyBle({
   required String name,
   required int? companyId,
   required List<String> serviceUuids,
+  int? appearance,
+  int? flags,
+  int? txPower,
 }) {
   final n = name.trim().toLowerCase();
 
@@ -48,7 +58,13 @@ BleId classifyBle({
   final finalBrand = brand ?? '未知';
   final domestic = brand != null ? isDomesticBrand(finalBrand) : false;
   return BleId(
-      brand: finalBrand, domestic: domestic, category: category, model: model);
+      brand: finalBrand,
+      domestic: domestic,
+      category: category,
+      model: model,
+      appearance: appearance,
+      flags: flags,
+      txPower: txPower);
 }
 
 /// 苹果「机型标识」→ 市场名（如 iPhone15,4 → iPhone 15）。
@@ -96,6 +112,57 @@ String appearanceCategory(int? code) {
   }
   if (c >= 0x0440 && c <= 0x044F) return '耳机';
   return '';
+}
+
+// ---------- 广播数据(AD) 结构解析（对齐 GAP LE Advertisements 规范）----------
+/// 解析 BLE 广播原始字节（Length-Type-Value 序列）为 {type: valueBytes}。
+/// 参考 SIG Assigned Numbers GAP：0x01=Flags, 0x0A=Tx Power, 0x19=Appearance。
+/// 与 BTstack 示例 gap_le_advertisements.c 的 ad_iterator 等价。
+Map<int, List<int>> parseAdvertisingData(List<int> data) {
+  final map = <int, List<int>>{};
+  int i = 0;
+  while (i + 1 < data.length) {
+    final len = data[i];
+    if (len <= 0) break;
+    final type = data[i + 1];
+    final start = i + 2;
+    final end = start + len - 1;
+    if (end > data.length) break;
+    map[type] = data.sublist(start, end);
+    i = end;
+  }
+  return map;
+}
+
+/// 广播 Appearance(0x19) → 16-bit 外观值（与 GATT 0x2A01 同语义，免连接即得品类）。
+int? adAppearance(Map<int, List<int>> ad) {
+  final v = ad[0x19];
+  if (v == null || v.length < 2) return null;
+  return v[0] | (v[1] << 8);
+}
+
+/// 广播 Flags(0x01) 首字节。
+int? adFlags(Map<int, List<int>> ad) {
+  final v = ad[0x01];
+  if (v == null || v.isEmpty) return null;
+  return v[0];
+}
+
+/// 广播 Tx Power Level(0x0A)，有符号 dBm（用于路径损耗测距）。
+int? adTxPower(Map<int, List<int>> ad) {
+  final v = ad[0x0A];
+  if (v == null || v.isEmpty) return null;
+  final b = v[0];
+  return b >= 128 ? b - 256 : b;
+}
+
+/// 由广播 Flags 判定无线电类型：
+/// bit2(BR/EDR Not Supported)=1 → 仅低功耗；清 0 → 双模（支持经典蓝牙）。
+/// flags 为空时默认低功耗（至少经 BLE 发现）。
+RadioType radioTypeFromFlags(int? flags) {
+  if (flags == null) return RadioType.lowEnergy;
+  if ((flags & 0x04) != 0) return RadioType.lowEnergy;
+  return RadioType.dual;
 }
 
 // ---------- 名称关键词 → 品牌 ----------

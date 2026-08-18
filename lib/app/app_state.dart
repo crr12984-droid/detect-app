@@ -10,6 +10,7 @@ import '../models/report.dart';
 import '../core/wifi_scanner.dart';
 import '../core/ble_scanner.dart';
 import '../core/device_classifier.dart';
+import '../core/company_db.dart';
 import '../core/permissions.dart';
 
 /// 全局应用状态：导航、扫描、定位、报告、设置。
@@ -341,8 +342,9 @@ class AppState {
     if (d.kind != DeviceKind.ble) return false;
     final bd = _ble.deviceFor(d.id);
     if (bd == null) return false;
-    String? model, devName, mfr;
+    String? model, devName, mfr, serial;
     int? appearance;
+    int? pnpVendorId; // PnP ID(0x2A50) 中 vendorId(SIG 公司码)
     bool got = false;
     try {
       await bd.connect(timeout: const Duration(seconds: 6));
@@ -363,6 +365,14 @@ class AppState {
             } else if (u.contains('2A01')) {
               final b = await c.read();
               if (b.length >= 2) appearance = b[0] | (b[1] << 8);
+            } else if (u.contains('2A25')) {
+              // Serial Number：设备唯一指纹（用于去重/报告列具体序列）
+              serial = String.fromCharCodes(await c.read()).trim();
+              if (serial?.isNotEmpty == true) got = true;
+            } else if (u.contains('2A50')) {
+              // PnP ID：[vendorIdSource, vendorId(2 LE), productId(2 LE), productVersion(2 LE)]
+              final b = await c.read();
+              if (b.length >= 7) pnpVendorId = b[1] | (b[2] << 8);
             }
           } catch (_) {}
         }
@@ -399,12 +409,21 @@ class AppState {
       newBrand = 'Apple';
       newDomestic = false;
     }
+    // PnP ID(0x2A50) 的 Vendor ID 是 SIG 公司码，与广播 Company ID 同空间 → 交叉验证品牌
+    if (newBrand == '未知' && pnpVendorId != null) {
+      final pb = brandFromCompanyId(pnpVendorId);
+      if (pb != '未知') {
+        newBrand = pb;
+        newDomestic = isDomesticBrand(pb);
+      }
+    }
     ble[i] = ble[i].copyWith(
       model: pretty ?? ble[i].model,
       name: newName ?? ble[i].name,
       category: newCat,
       brand: newBrand,
       domestic: newDomestic,
+      serial: serial ?? ble[i].serial,
     );
     notify();
     return true;

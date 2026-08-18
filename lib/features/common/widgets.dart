@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../core/distance.dart';
+import '../../models/device.dart';
 
 /// 区块标题（蓝点 + 标题），对应原型 .sec-head
 class SecHead extends StatelessWidget {
@@ -108,6 +109,26 @@ class DomesticTag extends StatelessWidget {
                     ? const Color(0xFF4CC079)
                     : const Color(0xFFE0B463))),
       );
+}
+
+class RadioTypeTag extends StatelessWidget {
+  final RadioType radioType;
+  const RadioTypeTag(this.radioType);
+  @override
+  Widget build(BuildContext context) {
+    final isLe = radioType == RadioType.lowEnergy;
+    final color = isLe ? AppColors.acc : AppColors.warn;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(radioTypeLabel(radioType),
+          style: TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+    );
+  }
 }
 
 void toast(BuildContext context, String msg) {

@@ -201,7 +201,7 @@ class DetectionPage extends StatelessWidget {
       BuildContext ctx) {
     final flex = isWifi
         ? [4, 3, 2, 2, 3, 2, 2]
-        : [4, 3, 2, 2, 3, 2, 2];
+        : [4, 3, 2, 2, 2, 3, 2, 2];
     final cells = items.map((d) => _row(flex, d, isWifi, ctx)).toList();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Padding(
@@ -241,15 +241,15 @@ class DetectionPage extends StatelessWidget {
   Widget _header(List<int> flex, bool isWifi) {
     final labels = isWifi
         ? ['名称', '品牌', '类型', '区域', '信号强度', '距离', '']
-        : ['名称', '品牌', '品类', '区域', '信号强度', '距离', ''];
+        : ['名称', '品牌', '品类', '类型', '区域', '信号强度', '距离', ''];
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: AppColors.line))),
       child: Row(
         children: List.generate(labels.length, (i) {
-          final isSig = i == 4;
-          final isDist = i == 5;
+          final isSig = isWifi ? i == 4 : i == 5;
+          final isDist = isWifi ? i == 5 : i == 6;
           if (!isSig && !isDist) {
             return Expanded(
                 flex: flex[i],
@@ -320,6 +320,7 @@ class DetectionPage extends StatelessWidget {
     final typeCell = d.wifiType == null
         ? const SizedBox.shrink()
         : WifiTypeTag(d.wifiType!);
+    final radioTypeCell = RadioTypeTag(d.radioType);
     final catCell = d.category.isEmpty
         ? const Text('未知', style: TextStyle(fontSize: 12, color: AppColors.txt3))
         : Row(children: [
@@ -358,7 +359,7 @@ class DetectionPage extends StatelessWidget {
 
     final cells = isWifi
         ? [nameCell, brandCell, typeCell, ZoneTag(indoor), signalCell, distCell, opCell]
-        : [nameCell, brandCell, catCell, ZoneTag(indoor), signalCell, distCell, opCell];
+        : [nameCell, brandCell, catCell, radioTypeCell, ZoneTag(indoor), signalCell, distCell, opCell];
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
