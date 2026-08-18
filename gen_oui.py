@@ -5,6 +5,8 @@
 """
 import urllib.request
 import re
+import os
+import json as _json
 
 URL = "https://gitlab.com/kalilinux/packages/nmap/-/raw/kali/master/nmap-mac-prefixes"
 
@@ -146,6 +148,14 @@ def main():
     path = "D:/代码开发/智能终端检测系统/detect_app/lib/core/oui_map.dart"
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
+    # 同时输出 JSON（供 Python Web 系统复用，单一数据源，避免 Dart/Python 两套分叉）
+    json_dir = "D:/代码开发/智能终端检测系统/local_web"
+    os.makedirs(json_dir, exist_ok=True)
+    _json.dump(
+        {"oui_to_brand": out, "domestic": sorted(DOMESTIC)},
+        open(os.path.join(json_dir, "oui_map.json"), "w", encoding="utf-8"),
+        ensure_ascii=False, indent=0,
+    )
     # 统计各品牌数量
     from collections import Counter
     c = Counter(out.values())
