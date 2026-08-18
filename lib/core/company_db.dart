@@ -1,3 +1,5 @@
+import 'oui_map.dart';
+
 /// Bluetooth SIG 分配的公司标识符（16-bit Company ID）→ 品牌。
 /// 数据来源：Bluetooth SIG Assigned Numbers
 /// https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers/
@@ -36,10 +38,7 @@ const Map<int, String> kCompanyToBrand = {
 
 String? brandFromCompanyId(int id) => kCompanyToBrand[id];
 
-/// 国产品牌集合（用于「国产/进口」标签）
-const Set<String> kDomesticBrands = {
-  'Huawei', 'Honor', 'Xiaomi', 'OPPO', 'vivo', 'OnePlus', 'realme', 'Meizu',
-  'ZTE', 'TP-Link', 'Tenda', 'Lenovo',
-};
-
-bool isDomesticBrand(String brand) => kDomesticBrands.contains(brand);
+/// 「国产/进口」标签统一使用 oui_map 中的 kOuiDomestic（宽表），
+/// 避免 WiFi/MAC 路径（已用 kOuiDomestic）与 BLE 路径判定不一致
+/// （否则同一品牌如 TCL/Hisense 经 WiFi 判国产、经 BLE 判进口）。
+bool isDomesticBrand(String brand) => kOuiDomestic.contains(brand);
