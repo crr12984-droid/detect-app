@@ -165,6 +165,25 @@ RadioType radioTypeFromFlags(int? flags) {
   return RadioType.dual;
 }
 
+/// 判断是否为「随机/加密广播名」。
+/// 苹果等设备未配对时会把 localName 替换成 base64 随机串（如
+/// "NGMp8n6AJcllMyw6b/bWGxcAI"），真实名要配对后经 GATT 0x2A00 才可得。
+/// 这类名无意义，识别后应走「品牌/品类」兜底展示。
+bool looksLikeRandomName(String name) {
+  final n = name.trim();
+  if (n.isEmpty) return false;
+  // 必须为纯 base64 字符集（不含空格/连字符/下划线等可读分隔符）
+  if (!RegExp(r'^[A-Za-z0-9+/=]+$').hasMatch(n)) return false;
+  // 强信号：含 base64 特殊字符（正常设备名几乎不会出现 / + =）
+  if (n.contains('/') || n.contains('+') || n.contains('=')) return n.length >= 12;
+  // 弱信号：纯字母数字高熵串（对齐苹果随机名 ~22 字符；真实产品名多含分隔符或 <20）
+  if (n.length < 20) return false;
+  final hasUpper = RegExp(r'[A-Z]').hasMatch(n);
+  final hasLower = RegExp(r'[a-z]').hasMatch(n);
+  final hasDigit = RegExp(r'[0-9]').hasMatch(n);
+  return hasUpper && hasLower && hasDigit;
+}
+
 // ---------- 名称关键词 → 品牌 ----------
 String? _brandFromName(String n) {
   if (n.contains('apple') ||

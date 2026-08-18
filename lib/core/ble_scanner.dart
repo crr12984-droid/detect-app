@@ -32,9 +32,11 @@ class BleScanner {
       final flags = adFlags(ad);
       final txPower = adv.txPowerLevel ?? adTxPower(ad);
       // 优先取广播名称：平台名 → 广播 advName
-      final advName = r.device.platformName.isNotEmpty
+      final rawName = r.device.platformName.isNotEmpty
           ? r.device.platformName
           : (adv.advName.isNotEmpty ? adv.advName : '');
+      // 苹果未配对时广播的是随机 base64 串，不是真实名 → 视作无名，走品牌/品类兜底
+      final advName = looksLikeRandomName(rawName) ? '' : rawName;
       final id = classifyBle(
           mac: mac,
           name: advName,
