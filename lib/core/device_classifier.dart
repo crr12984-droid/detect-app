@@ -184,6 +184,31 @@ bool looksLikeRandomName(String name) {
   return hasUpper && hasLower && hasDigit;
 }
 
+/// 经典蓝牙 Class of Device(24位) → 品类。bits 8-12=Major, bits 2-7=Minor。
+/// 对齐 gap_le_advertisements.c 的 0x0D CoD 与 detect_core.cod_to_category。
+String classicCodToCategory(int cod) {
+  if (cod == 0) return '';
+  final major = (cod >> 8) & 0x1F;
+  final minor = (cod >> 2) & 0x3F;
+  if (major == 0x01) return '笔电';
+  if (major == 0x02) return '手机';
+  if (major == 0x03) return '路由器';
+  if (major == 0x04) {
+    // 0x05 扬声器 / 0x0A HiFi → 音箱；其余(耳机/免提/便携/车载) → 耳机
+    if (minor == 0x05 || minor == 0x0A) return '音箱';
+    return '耳机';
+  }
+  if (major == 0x05) {
+    if (minor == 0x10 || minor == 0x40) return '键盘';
+    return '鼠标';
+  }
+  if (major == 0x06) return '相机';
+  if (major == 0x07) return '手表';
+  if (major == 0x08) return '玩具';
+  if (major == 0x09) return '健康设备';
+  return '';
+}
+
 // ---------- 名称关键词 → 品牌 ----------
 String? _brandFromName(String n) {
   if (n.contains('apple') ||
@@ -192,6 +217,13 @@ String? _brandFromName(String n) {
       n.contains('ipad') ||
       n.contains('ipod') ||
       n.contains('homepod')) {
+    return 'Apple';
+  }
+  if (n == 'mac' ||
+      n.contains('macbook') ||
+      n.contains('imac') ||
+      n.contains('mac mini') ||
+      n.contains('mac pro')) {
     return 'Apple';
   }
   if (n.contains('huawei')) return 'Huawei';
@@ -254,6 +286,10 @@ String _categoryFromName(String n) {
       n.contains('笔记本') ||
       n.contains('电脑') ||
       n.contains('macbook') ||
+      n == 'mac' ||
+      n.contains('imac') ||
+      n.contains('mac mini') ||
+      n.contains('mac pro') ||
       n.contains(' pc') ||
       n.contains('pc ')) {
     return '笔电';
