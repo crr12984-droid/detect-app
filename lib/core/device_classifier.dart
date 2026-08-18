@@ -1,6 +1,5 @@
 import 'company_db.dart';
 import 'brand_db.dart';
-import '../models/device.dart';
 
 /// BLE 广播数据的识别结果
 class BleId {

@@ -354,10 +354,10 @@ class AppState {
           try {
             if (u.contains('2A24')) {
               model = String.fromCharCodes(await c.read()).trim();
-              if (model?.isNotEmpty == true) got = true;
+              if (model.isNotEmpty) got = true;
             } else if (u.contains('2A00')) {
               devName = String.fromCharCodes(await c.read()).trim();
-              if (devName?.isNotEmpty == true) got = true;
+              if (devName.isNotEmpty) got = true;
             } else if (u.contains('2A29')) {
               mfr = String.fromCharCodes(await c.read()).trim();
             } else if (u.contains('2A01')) {
@@ -366,7 +366,7 @@ class AppState {
             } else if (u.contains('2A25')) {
               // Serial Number：设备唯一指纹（用于去重/报告列具体序列）
               serial = String.fromCharCodes(await c.read()).trim();
-              if (serial?.isNotEmpty == true) got = true;
+              if (serial.isNotEmpty) got = true;
             } else if (u.contains('2A50')) {
               // PnP ID：[vendorIdSource, vendorId(2 LE), productId(2 LE), productVersion(2 LE)]
               final b = await c.read();
@@ -383,7 +383,7 @@ class AppState {
     final i = ble.indexWhere((x) => x.id == d.id);
     if (i < 0) return false;
     final pretty =
-        (model != null && model!.isNotEmpty) ? appleMarketingName(model!) : null;
+        (model != null && model.isNotEmpty) ? appleMarketingName(model) : null;
     // 仅当当前名称为兜底（未知/品牌品类拼接）时用 GATT 设备名覆盖
     final cur = ble[i].name;
     final nameUnknown = cur.isEmpty ||
@@ -393,7 +393,7 @@ class AppState {
             ble[i].category.isNotEmpty &&
             cur == '${ble[i].brand} ${ble[i].category}');
     final newName =
-        (devName != null && devName!.isNotEmpty && nameUnknown) ? devName! : null;
+        (devName != null && devName.isNotEmpty && nameUnknown) ? devName : null;
     // 广播未给出品类时，用 0x2A01 外观补强
     String newCat = ble[i].category;
     if (newCat.isEmpty && appearance != null) {
@@ -403,14 +403,14 @@ class AppState {
     // 厂商字段补强品牌（如 0x2A29=Apple）
     String newBrand = ble[i].brand;
     bool newDomestic = ble[i].domestic;
-    if (newBrand == '未知' && mfr != null && mfr!.toLowerCase().contains('apple')) {
+    if (newBrand == '未知' && mfr != null && mfr.toLowerCase().contains('apple')) {
       newBrand = 'Apple';
       newDomestic = false;
     }
     // PnP ID(0x2A50) 的 Vendor ID 是 SIG 公司码，与广播 Company ID 同空间 → 交叉验证品牌
     if (newBrand == '未知' && pnpVendorId != null) {
       final pb = brandFromCompanyId(pnpVendorId);
-      if (pb != '未知') {
+      if (pb != null && pb != '未知') {
         newBrand = pb;
         newDomestic = isDomesticBrand(pb);
       }

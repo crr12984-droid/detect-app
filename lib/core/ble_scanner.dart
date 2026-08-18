@@ -26,20 +26,16 @@ class BleScanner {
       final mac = r.device.remoteId.str.toUpperCase();
       _devices[mac] = r.device;
       final adv = r.advertisementData;
-      // 记录 connectable 状态（Android 上由广播包判定；未提供时 null → 默认可尝试）
-      final conn = adv.connectable;
-      if (conn != null) _connectable[mac] = conn;
+      // 记录 connectable 状态（bool，Android 上由广播包判定）
+      _connectable[mac] = adv.connectable;
       final companyId = adv.manufacturerData.isNotEmpty
           ? adv.manufacturerData.keys.first
           : null;
       final uuids = adv.serviceUuids.map((g) => g.str).toList();
-      // 解析广播原始字节：Appearance(0x19)/Flags(0x01)/TxPower(0x0A)
-      // （对齐 gap_le_advertisements.c；免连接即得品类/类型，解决 iOS 拒连盲区）
-      final raw = adv.rawData;
-      final ad = raw != null ? parseAdvertisingData(raw) : <int, List<int>>{};
-      final appearance = adAppearance(ad);
-      final flags = adFlags(ad);
-      final txPower = adv.txPowerLevel ?? adTxPower(ad);
+      // flutter_blue_plus 直接提供 appearance(0x19)/txPowerLevel(0x0A)，
+      // 无需自行解析原始广播字节（AdvertisementData 无 rawData 字段）
+      final appearance = adv.appearance;
+      final txPower = adv.txPowerLevel;
       // 优先取广播名称：平台名 → 广播 advName
       final rawName = r.device.platformName.isNotEmpty
           ? r.device.platformName
@@ -52,7 +48,6 @@ class BleScanner {
           companyId: companyId,
           serviceUuids: uuids,
           appearance: appearance,
-          flags: flags,
           txPower: txPower);
       // 名称/服务未给出品类时，用广播 Appearance(0x19) 补强（免连接即得）
       String category = id.category;
