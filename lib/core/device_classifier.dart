@@ -79,6 +79,25 @@ String appleMarketingName(String modelId) {
   return map[modelId] ?? modelId;
 }
 
+/// GATT Appearance(0x2A01) 16-bit 值 → 品类（对齐报告表1）。
+/// 结构：低 6 位为子类型，高 10 位为类别。按类别段判定：
+/// 手机 0x0040-、电脑 0x0080-、手表 0x00C0-、HID 外设 0x03C0-、音频 0x0440-。
+String appearanceCategory(int? code) {
+  if (code == null) return '';
+  final c = code;
+  if (c >= 0x0040 && c <= 0x004F) return '手机';
+  if (c >= 0x0080 && c <= 0x008F) return '笔电';
+  if (c >= 0x00C0 && c <= 0x00CF) return '手表';
+  if (c >= 0x03C0 && c <= 0x03CF) {
+    if (c == 0x03C1) return '键盘';
+    if (c == 0x03C2) return '鼠标';
+    if (c == 0x03C5) return '平板';
+    return '鼠标';
+  }
+  if (c >= 0x0440 && c <= 0x044F) return '耳机';
+  return '';
+}
+
 // ---------- 名称关键词 → 品牌 ----------
 String? _brandFromName(String n) {
   if (n.contains('apple') ||

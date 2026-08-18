@@ -174,6 +174,10 @@ class AppState {
       _wifiLoop();
     } else {
       _bleLoop();
+      // 后台并行解析型号/名称（连接读 GATT），不阻塞扫描刷新
+      _modelTimer?.cancel();
+      _modelTimer =
+          Timer.periodic(const Duration(seconds: 4), (_) => _maybeResolveModels());
     }
   }
 
@@ -194,6 +198,7 @@ class AppState {
 
   /// 连续 BLE 扫描（每次超时后自动续扫），通过订阅 scanResults 实时上报周边设备
   StreamSubscription? _bleSub;
+  Timer? _modelTimer; // 后台型号解析定时器（与扫描并行，避免阻塞扫描刷新）
   Future<void> _bleLoop() async {
     if (!scanning || detType != DeviceKind.ble) return;
     if (!(await _ble.supported)) return;
@@ -214,8 +219,6 @@ class AppState {
             .where((s) => !s)
             .first
             .timeout(_bleTimeout() + const Duration(seconds: 1));
-        // 扫描停止间隙尝试连接读取精确型号（避免与扫描冲突）
-        await _maybeResolveModels();
         await Future.delayed(const Duration(milliseconds: 200));
       } catch (_) {
         await Future.delayed(const Duration(seconds: 1));
@@ -227,6 +230,8 @@ class AppState {
     scanning = false;
     _scanTimer?.cancel();
     _scanTimer = null;
+    _modelTimer?.cancel();
+    _modelTimer = null;
     try {
       if (FlutterBluePlus.isScanningNow) FlutterBluePlus.stopScan();
     } catch (_) {}
@@ -296,69 +301,113 @@ class AppState {
   }
 
   // ---------- 精确型号/名称（连接后读 GATT 设备信息服务 0x180A） ----------
+  /// 后台批次解析型号：每轮最多解析若干台，仅「成功」才计入 _modelTried，
+  /// 失败则保留在待解析集合以便重试（解决苹果设备因连接被拒而永久看不到型号的问题）。
+  final Map<String, int> _modelFails = {}; // id -> 连续失败次数
+
   Future<void> _maybeResolveModels() async {
     if (_resolving) return;
+    int budget = 2; // 每轮最多解析 2 台，避免占用过多连接时间
     for (final d in ble) {
-      // 名称未知或型号未知时，连接读取真实型号/设备名（每次扫描间隙只尝试一台）
+      if (budget <= 0) break;
       final nameUnknown =
           d.name.isEmpty || d.name.contains('未知设备') || d.name == '(未知设备)';
-      if (d.model == null &&
-          !_modelTried.contains(d.id) &&
-          (d.brand == 'Apple' ||
-              d.brand == '未知' ||
-              nameUnknown)) {
-        _modelTried.add(d.id);
-        _resolving = true;
-        try {
-          await resolveModel(d);
-        } catch (_) {}
+      final needs =
+          d.model == null && (d.brand == 'Apple' || d.brand == '未知' || nameUnknown);
+      if (!needs || _modelTried.contains(d.id)) continue;
+      if ((_modelFails[d.id] ?? 0) >= 3) continue; // 连续失败 3 次后放弃
+      _resolving = true;
+      bool ok = false;
+      try {
+        ok = await resolveModel(d);
+      } catch (_) {
+        ok = false;
+      } finally {
         _resolving = false;
-        return;
+      }
+      if (ok) {
+        _modelTried.add(d.id);
+        _modelFails.remove(d.id);
+        budget--;
+      } else {
+        _modelFails[d.id] = (_modelFails[d.id] ?? 0) + 1;
       }
     }
   }
 
-  Future<void> resolveModel(Device d) async {
-    if (d.kind != DeviceKind.ble || d.model != null) return;
+  /// 连接设备读取设备信息服务(0x180A)：0x2A24=型号、0x2A00=名称、
+  /// 0x2A29=厂商、0x2A01=外观(品类)。返回是否成功取到任何信息。
+  Future<bool> resolveModel(Device d) async {
+    if (d.kind != DeviceKind.ble) return false;
     final bd = _ble.deviceFor(d.id);
-    if (bd == null) return;
+    if (bd == null) return false;
+    String? model, devName, mfr;
+    int? appearance;
+    bool got = false;
     try {
-      await bd.connect(timeout: const Duration(seconds: 4));
+      await bd.connect(timeout: const Duration(seconds: 6));
       final services = await bd.discoverServices();
-      String? model;
-      String? devName;
       for (final s in services) {
         if (!s.uuid.str.toUpperCase().contains('180A')) continue;
         for (final c in s.characteristics) {
           final u = c.uuid.str.toUpperCase();
-          if (u.contains('2A24')) {
-            model = String.fromCharCodes(await c.read()).trim();
-          } else if (u.contains('2A00')) {
-            devName = String.fromCharCodes(await c.read()).trim();
-          }
+          try {
+            if (u.contains('2A24')) {
+              model = String.fromCharCodes(await c.read()).trim();
+              if (model?.isNotEmpty == true) got = true;
+            } else if (u.contains('2A00')) {
+              devName = String.fromCharCodes(await c.read()).trim();
+              if (devName?.isNotEmpty == true) got = true;
+            } else if (u.contains('2A29')) {
+              mfr = String.fromCharCodes(await c.read()).trim();
+            } else if (u.contains('2A01')) {
+              final b = await c.read();
+              if (b.length >= 2) appearance = b[0] | (b[1] << 8);
+            }
+          } catch (_) {}
         }
       }
       await bd.disconnect();
-      final i = ble.indexWhere((x) => x.id == d.id);
-      if (i < 0) return;
-      final pretty = model != null && model.isNotEmpty
-          ? appleMarketingName(model)
-          : null;
-      // 仅当当前名称为兜底（未知/品牌品类拼接）时用 GATT 设备名覆盖
-      final cur = ble[i].name;
-      final nameUnknown = cur.isEmpty ||
-          cur == '(未知设备)' ||
-          cur.contains('未知设备') ||
-          (cur.contains(ble[i].brand) && cur.contains(ble[i].category));
-      final newName = (devName != null && devName.isNotEmpty && nameUnknown)
-          ? devName
-          : null;
-      ble[i] = ble[i].copyWith(
-          model: pretty, name: newName ?? ble[i].name);
-      notify();
     } catch (_) {
-      // 未配对/连接失败：保持类别识别结果
+      return false;
     }
+    if (!got) return false; // 未读到任何信息：视为失败，待重试
+    final i = ble.indexWhere((x) => x.id == d.id);
+    if (i < 0) return false;
+    final pretty =
+        (model != null && model!.isNotEmpty) ? appleMarketingName(model!) : null;
+    // 仅当当前名称为兜底（未知/品牌品类拼接）时用 GATT 设备名覆盖
+    final cur = ble[i].name;
+    final nameUnknown = cur.isEmpty ||
+        cur == '(未知设备)' ||
+        cur.contains('未知设备') ||
+        (cur.contains(ble[i].brand) &&
+            ble[i].category.isNotEmpty &&
+            cur == '${ble[i].brand} ${ble[i].category}');
+    final newName =
+        (devName != null && devName!.isNotEmpty && nameUnknown) ? devName! : null;
+    // 广播未给出品类时，用 0x2A01 外观补强
+    String newCat = ble[i].category;
+    if (newCat.isEmpty && appearance != null) {
+      final ap = appearanceCategory(appearance);
+      if (ap.isNotEmpty) newCat = ap;
+    }
+    // 厂商字段补强品牌（如 0x2A29=Apple）
+    String newBrand = ble[i].brand;
+    bool newDomestic = ble[i].domestic;
+    if (newBrand == '未知' && mfr != null && mfr!.toLowerCase().contains('apple')) {
+      newBrand = 'Apple';
+      newDomestic = false;
+    }
+    ble[i] = ble[i].copyWith(
+      model: pretty ?? ble[i].model,
+      name: newName ?? ble[i].name,
+      category: newCat,
+      brand: newBrand,
+      domestic: newDomestic,
+    );
+    notify();
+    return true;
   }
 
   void backToList() {
