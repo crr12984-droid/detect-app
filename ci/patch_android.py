@@ -230,7 +230,7 @@ class MainActivity : FlutterActivity() {
                         try {
                             name = device.name ?: ""
                             mac = device.address ?: ""
-                            cod = device.bluetoothClass?.classOfDevice ?: 0
+                            cod = device.bluetoothClass?.deviceClass ?: 0
                         } catch (_: Exception) {}
                         eventSink?.success(mapOf("name" to name, "mac" to mac, "rssi" to rssi, "cod" to cod))
                     } catch (_: Exception) {}
