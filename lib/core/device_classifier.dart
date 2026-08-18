@@ -67,19 +67,39 @@ BleId classifyBle({
 }
 
 /// 苹果「机型标识」→ 市场名（如 iPhone15,4 → iPhone 15）。
-/// 数据来源：苹果 DeviceIdentifier 对照表（部分常见机型）。
+/// 数据来源：苹果 DeviceIdentifier 对照表。
 String appleMarketingName(String modelId) {
   const map = {
-    'iPhone14,5': 'iPhone 13',
+    // iPhone 11 系列
+    'iPhone12,1': 'iPhone 11',
+    'iPhone12,3': 'iPhone 11 Pro',
+    'iPhone12,5': 'iPhone 11 Pro Max',
+    // iPhone 12 系列
+    'iPhone13,1': 'iPhone 12 mini',
+    'iPhone13,2': 'iPhone 12',
+    'iPhone13,3': 'iPhone 12 Pro',
+    'iPhone13,4': 'iPhone 12 Pro Max',
+    // iPhone 13 系列
     'iPhone14,4': 'iPhone 13 mini',
+    'iPhone14,5': 'iPhone 13',
     'iPhone14,2': 'iPhone 13 Pro',
     'iPhone14,3': 'iPhone 13 Pro Max',
-    'iPhone15,4': 'iPhone 15',
-    'iPhone15,5': 'iPhone 15 Plus',
+    // iPhone 14 系列
+    'iPhone14,7': 'iPhone 14',
+    'iPhone14,8': 'iPhone 14 Plus',
     'iPhone15,2': 'iPhone 14 Pro',
     'iPhone15,3': 'iPhone 14 Pro Max',
+    // iPhone 15 系列
+    'iPhone15,4': 'iPhone 15',
+    'iPhone15,5': 'iPhone 15 Plus',
     'iPhone16,1': 'iPhone 15 Pro',
     'iPhone16,2': 'iPhone 15 Pro Max',
+    // iPhone 16 系列
+    'iPhone17,1': 'iPhone 16 Pro',
+    'iPhone17,2': 'iPhone 16 Pro Max',
+    'iPhone17,3': 'iPhone 16',
+    'iPhone17,4': 'iPhone 16 Plus',
+    // AirPods
     'A2031': 'AirPods (2代)',
     'A2032': 'AirPods (2代)',
     'A2083': 'AirPods Pro',
@@ -90,6 +110,33 @@ String appleMarketingName(String modelId) {
     'A2698': 'AirPods Pro (2代)',
     'A2699': 'AirPods Pro (2代)',
     'A2700': 'AirPods Pro (2代)',
+    'A3047': 'AirPods Pro (2代)',
+    'A3048': 'AirPods Pro (2代)',
+    'A3050': 'AirPods (3代)',
+    'A3053': 'AirPods (4代)',
+    // Apple Watch
+    'Watch1,1': 'Apple Watch (1代)',
+    'Watch1,2': 'Apple Watch (1代)',
+    'Watch2,6': 'Apple Watch Series 1',
+    'Watch2,7': 'Apple Watch Series 2',
+    'Watch2,3': 'Apple Watch Series 2',
+    'Watch2,4': 'Apple Watch Series 2',
+    'Watch3,1': 'Apple Watch Series 3',
+    'Watch3,3': 'Apple Watch Series 3',
+    'Watch4,1': 'Apple Watch Series 4',
+    'Watch4,4': 'Apple Watch Series 4',
+    'Watch5,1': 'Apple Watch Series 5',
+    'Watch5,4': 'Apple Watch Series 5',
+    'Watch6,1': 'Apple Watch Series 6',
+    'Watch6,4': 'Apple Watch Series 6',
+    'Watch6,6': 'Apple Watch SE',
+    'Watch6,9': 'Apple Watch SE',
+    // iPad（机型标识以 iPad 开头）
+    'iPad13,1': 'iPad Air (5代)',
+    'iPad13,2': 'iPad Air (5代)',
+    'iPad11,6': 'iPad (9代)',
+    'iPad13,16': 'iPad Air (5代)',
+    'iPad13,17': 'iPad Air (5代)',
   };
   return map[modelId] ?? modelId;
 }
@@ -197,6 +244,28 @@ String classicCodToCategory(int cod) {
   if (major == 0x08) return '玩具';
   if (major == 0x09) return '健康设备';
   return '';
+}
+
+/// 经典蓝牙设备识别：名称关键词(品牌+类型)优先，CoD 补类型。
+/// 对齐友商方案：remote name request 拿真实名(如 iPhone)，无需配对。
+BleId classifyClassicBt({required String name, required String mac, int cod = 0}) {
+  final n = name.trim().toLowerCase();
+  String? brand = _brandFromName(n);
+  String category = _categoryFromName(n);
+  if (category.isEmpty && cod != 0) category = classicCodToCategory(cod);
+  final model = _modelFromName(name);
+  // 经典蓝牙 MAC 通常为真实地址（非随机化），OUI 兜底更可靠
+  if (brand == null) {
+    final b = brandFromMac(mac);
+    if (b['brand'] != '未知') brand = b['brand'] as String;
+  }
+  final finalBrand = brand ?? '未知';
+  final domestic = brand != null ? isDomesticBrand(finalBrand) : false;
+  return BleId(
+      brand: finalBrand,
+      domestic: domestic,
+      category: category,
+      model: model);
 }
 
 // ---------- 名称关键词 → 品牌 ----------

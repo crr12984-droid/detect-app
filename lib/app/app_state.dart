@@ -9,8 +9,10 @@ import '../models/device.dart';
 import '../models/report.dart';
 import '../core/wifi_scanner.dart';
 import '../core/ble_scanner.dart';
+import '../core/classic_bt_scanner.dart';
 import '../core/device_classifier.dart';
 import '../core/company_db.dart';
+import '../core/device_store.dart';
 import '../core/permissions.dart';
 
 /// 全局应用状态：导航、扫描、定位、报告、设置。
@@ -19,8 +21,12 @@ class AppState {
   int section = 0; // 0 智能检测, 1 报告管理, 2 系统设置
   String? overlay; // null | 'detection' | 'position' | 'preview'
   DeviceKind? detType;
-  List<Device> wifi = [];
-  List<Device> ble = [];
+  // 设备表（内存索引 id→Device，界面的唯一数据源）。
+  // 增量合并：新增追加、信号/距离变化更新、超时置灰、置灰超时删除。
+  final Map<String, Device> _wifiMap = {};
+  final Map<String, Device> _bleMap = {};
+  List<Device> get wifi => _wifiMap.values.toList();
+  List<Device> get ble => _bleMap.values.toList();
   List<Report> reports = [];
   Report? previewReport;
 
@@ -38,9 +44,15 @@ class AppState {
   bool scanning = false;
   Timer? _scanTimer;
   Timer? _bannerTimer;
+  Timer? _houseTimer; // 周期检查：置灰 / 删除超时设备
   final BleScanner _ble = BleScanner(); // 缓存 BluetoothDevice，供连接读型号
+  final ClassicBtScanner _classicBt = ClassicBtScanner(); // 经典蓝牙 discovery
   final Set<String> _modelTried = {}; // 已尝试读型号的 MAC，避免重复连接
   bool _resolving = false;
+
+  // 置灰/删除阈值
+  static const Duration _staleAfter = Duration(minutes: 1); // 无上报超此 → 置灰
+  static const Duration _removeAfter = Duration(minutes: 2); // 置灰后超此 → 删除
 
   // 定位
   Device? tracked;
@@ -72,6 +84,8 @@ class AppState {
     stopPosition();
     tracked = null;
     trend = [];
+    _wifiMap.clear();
+    _bleMap.clear();
     authed = false;
     overlay = null;
     section = 0;
@@ -109,6 +123,8 @@ class AppState {
     final dir = detType == DeviceKind.wifi ? wifiSortDir : bleSortDir;
     final l = [...list];
     l.sort((a, b) {
+      // 置灰设备恒排末尾（无论排序键/方向）
+      if (a.stale != b.stale) return a.stale ? 1 : -1;
       final cmp = key == 'dist'
           ? a.distance.compareTo(b.distance)
           : a.rssi.compareTo(b.rssi);
@@ -159,6 +175,22 @@ class AppState {
           ? '扫描需要蓝牙与定位权限，请授予后重试'
           : '请先在系统设置中开启定位服务');
     }
+    // 清空本次会话内存表，从数据库恢复历史设备（恢复后标记置灰，避免干扰新扫描）
+    if (type == DeviceKind.wifi) {
+      _wifiMap.clear();
+    } else {
+      _bleMap.clear();
+    }
+    final saved = await DeviceStore.loadAll(type);
+    for (final d in saved) {
+      d.stale = true; // 历史设备上次上报已超时，先置灰；本次重新发现会恢复活跃
+      if (type == DeviceKind.wifi) {
+        _wifiMap[d.id] = d;
+      } else {
+        _bleMap[d.id] = d;
+      }
+    }
+    _startHousekeeping();
     await startScan();
   }
 
@@ -174,19 +206,89 @@ class AppState {
     if (detType == DeviceKind.wifi) {
       _wifiLoop();
     } else {
-      // 型号/名称解析改为「扫描回调里立即触发」（抢 connectable 窗口），不再用定时器批量
+      // BLE 主通道 + 经典蓝牙补充通道（并行），型号解析在扫描回调里立即触发
       _bleLoop();
+      _classicLoop();
     }
   }
 
-  /// 连续 WiFi 扫描：每次重新触发扫描并读取结果，实时刷新列表
+  /// 增量合并一轮扫描结果：新增→追加；已有→更新信号/距离/时间戳（信号变化才刷新）。
+  void _mergeInto(Map<String, Device> map, List<Device> fresh) {
+    for (final d in fresh) {
+      final ex = map[d.id];
+      if (ex == null) {
+        // 新增：直接入库
+        map[d.id] = d;
+        DeviceStore.upsert(d);
+        continue;
+      }
+      // 已有设备重新上报：无论信号是否变化，都刷新 lastSeen；若曾置灰则恢复活跃
+      final changed = ex.rssi != d.rssi;
+      final revived = ex.stale;
+      if (!changed && !revived) {
+        // 无变化且本就活跃：仅刷新 lastSeen（表示本轮仍在持续上报）
+        ex.lastSeen = DateTime.now();
+        continue;
+      }
+      map[d.id] = ex.copyWith(
+        rssi: d.rssi,
+        seen: ex.seen + 1,
+        stale: false,
+        // 仅当新值有信息量时才覆盖（避免把 GATT 读到的型号冲掉）
+        name: ex.name.isEmpty || ex.name == '(未知设备)' || ex.name.contains('未知')
+            ? d.name
+            : ex.name,
+        brand: ex.brand == '未知' && d.brand != '未知' ? d.brand : ex.brand,
+        category: ex.category.isEmpty && d.category.isNotEmpty ? d.category : ex.category,
+        model: ex.model == null && d.model != null ? d.model : ex.model,
+      );
+      DeviceStore.upsert(map[d.id]!);
+    }
+  }
+
+  /// 周期 housekeeping：无上报超阈值 → 置灰；置灰超阈值 → 删除（内存 + 数据库）。
+  void _startHousekeeping() {
+    _houseTimer?.cancel();
+    _houseTimer =
+        Timer.periodic(const Duration(seconds: 5), (_) => _housekeep());
+  }
+
+  void _housekeep() {
+    if (!scanning) return;
+    final now = DateTime.now();
+    _sweep(_wifiMap, DeviceKind.wifi, now);
+    _sweep(_bleMap, DeviceKind.ble, now);
+    notify();
+  }
+
+  void _sweep(Map<String, Device> map, DeviceKind kind, DateTime now) {
+    final ids = map.keys.toList();
+    for (final id in ids) {
+      final d = map[id]!;
+      final idle = now.difference(d.lastSeen);
+      if (d.stale) {
+        // 已置灰，仍无上报超 removeAfter → 判定消失，删除
+        if (idle >= _removeAfter) {
+          map.remove(id);
+          DeviceStore.remove(kind, id);
+        }
+      } else if (idle >= _staleAfter) {
+        // 无上报超 staleAfter → 置灰并排至末尾（直接改字段，避免 copyWith 刷新 lastSeen）
+        d.stale = true;
+        DeviceStore.upsert(d);
+      }
+    }
+  }
+
+  /// 连续 WiFi 扫描：增量合并结果（不整体覆盖，避免扫描间隙数据消失）
   Future<void> _wifiLoop() async {
     while (scanning && detType == DeviceKind.wifi) {
       try {
         await WifiScanner().start();
         await Future.delayed(const Duration(milliseconds: 1200));
         if (!scanning || detType != DeviceKind.wifi) return;
-        wifi = await WifiScanner().getResults();
+        final fresh = await WifiScanner().getResults();
+        _mergeInto(_wifiMap, fresh);
         notify();
       } catch (_) {}
       await Future.delayed(
@@ -202,7 +304,8 @@ class AppState {
     _bleSub?.cancel();
     _bleSub = FlutterBluePlus.scanResults.listen((list) {
       if (!scanning || detType != DeviceKind.ble) return;
-      ble = _ble.mapResults(list);
+      final fresh = _ble.mapResults(list);
+      _mergeInto(_bleMap, fresh);
       notify();
       // 收到广播后立即尝试解析型号/名称（抢 connectable 窗口，不等待定时器）
       _maybeResolveModels();
@@ -225,10 +328,53 @@ class AppState {
     }
   }
 
+  /// 连续经典蓝牙 discovery：免配对发现可发现设备（耳机/手表/音箱/键鼠等），拿真实名 + CoD。
+  Future<void> _classicLoop() async {
+    while (scanning && detType == DeviceKind.ble) {
+      try {
+        await _classicBt.startDiscovery((r) {
+          if (!scanning || detType != DeviceKind.ble) return;
+          final d = _classicToDevice(r);
+          _mergeInto(_bleMap, [d]);
+          notify();
+        });
+        // discovery 持续一段时间后停止，让位给 BLE 扫描
+        await Future.delayed(const Duration(seconds: 12));
+        await _classicBt.stopDiscovery();
+      } catch (_) {}
+      await Future.delayed(const Duration(seconds: 3));
+    }
+  }
+
+  /// 经典蓝牙发现结果 → Device（radioType=classic）
+  Device _classicToDevice(ClassicBtResult r) {
+    final id = r.mac.toUpperCase();
+    final res = classifyClassicBt(name: r.name, mac: id, cod: r.cod);
+    final name = r.name.isNotEmpty
+        ? r.name
+        : (res.brand != '未知' && res.category.isNotEmpty
+            ? '${res.brand} ${res.category}'
+            : (res.brand != '未知' ? res.brand : '(未知设备)'));
+    return Device(
+      kind: DeviceKind.ble,
+      id: id,
+      name: name,
+      brand: res.brand,
+      domestic: res.domestic,
+      rssi: r.rssi,
+      category: res.category,
+      radioType: RadioType.classic,
+      model: res.model,
+    );
+  }
+
   void stopScan() {
     scanning = false;
     _scanTimer?.cancel();
     _scanTimer = null;
+    _houseTimer?.cancel();
+    _houseTimer = null;
+    _classicBt.stopDiscovery();
     try {
       if (FlutterBluePlus.isScanningNow) FlutterBluePlus.stopScan();
     } catch (_) {}
@@ -251,7 +397,6 @@ class AppState {
     section = 0;
     notify();
   }
-
   // ---------- 定位 ----------
   Future<void> openPosition(Device d) async {
     stopScan();
@@ -307,6 +452,8 @@ class AppState {
     int budget = 2; // 每轮最多解析 2 台，避免占用过多连接时间
     for (final d in ble) {
       if (budget <= 0) break;
+      // 经典蓝牙设备已通过 remote name 拿到真实名，无 BLE 缓存，不做 GATT 解析
+      if (d.radioType != RadioType.lowEnergy) continue;
       final nameUnknown =
           d.name.isEmpty || d.name.contains('未知设备') || d.name == '(未知设备)';
       final needs =
@@ -380,29 +527,28 @@ class AppState {
       return false;
     }
     if (!got) return false; // 未读到任何信息：视为失败，待重试
-    final i = ble.indexWhere((x) => x.id == d.id);
-    if (i < 0) return false;
+    final cur = _bleMap[d.id];
+    if (cur == null) return false;
     final pretty =
         (model != null && model.isNotEmpty) ? appleMarketingName(model) : null;
     // 仅当当前名称为兜底（未知/品牌品类拼接）时用 GATT 设备名覆盖
-    final cur = ble[i].name;
-    final nameUnknown = cur.isEmpty ||
-        cur == '(未知设备)' ||
-        cur.contains('未知设备') ||
-        (cur.contains(ble[i].brand) &&
-            ble[i].category.isNotEmpty &&
-            cur == '${ble[i].brand} ${ble[i].category}');
+    final nameUnknown = cur.name.isEmpty ||
+        cur.name == '(未知设备)' ||
+        cur.name.contains('未知设备') ||
+        (cur.name.contains(cur.brand) &&
+            cur.category.isNotEmpty &&
+            cur.name == '${cur.brand} ${cur.category}');
     final newName =
         (devName != null && devName.isNotEmpty && nameUnknown) ? devName : null;
     // 广播未给出品类时，用 0x2A01 外观补强
-    String newCat = ble[i].category;
+    String newCat = cur.category;
     if (newCat.isEmpty && appearance != null) {
       final ap = appearanceCategory(appearance);
       if (ap.isNotEmpty) newCat = ap;
     }
     // 厂商字段补强品牌（如 0x2A29=Apple）
-    String newBrand = ble[i].brand;
-    bool newDomestic = ble[i].domestic;
+    String newBrand = cur.brand;
+    bool newDomestic = cur.domestic;
     if (newBrand == '未知' && mfr != null && mfr.toLowerCase().contains('apple')) {
       newBrand = 'Apple';
       newDomestic = false;
@@ -415,14 +561,15 @@ class AppState {
         newDomestic = isDomesticBrand(pb);
       }
     }
-    ble[i] = ble[i].copyWith(
-      model: pretty ?? ble[i].model,
-      name: newName ?? ble[i].name,
+    _bleMap[d.id] = cur.copyWith(
+      model: pretty ?? cur.model,
+      name: newName ?? cur.name,
       category: newCat,
       brand: newBrand,
       domestic: newDomestic,
-      serial: serial ?? ble[i].serial,
+      serial: serial ?? cur.serial,
     );
+    DeviceStore.upsert(_bleMap[d.id]!);
     notify();
     return true;
   }
@@ -442,10 +589,11 @@ class AppState {
 
   // ---------- 查扣 ----------
   void detain(Device d) {
-    final list = detType == DeviceKind.wifi ? wifi : ble;
-    final i = list.indexWhere((x) => x.id == d.id);
-    if (i >= 0) {
-      list[i] = list[i].copyWith(seized: true);
+    final map = detType == DeviceKind.wifi ? _wifiMap : _bleMap;
+    final cur = map[d.id];
+    if (cur != null) {
+      map[d.id] = cur.copyWith(seized: true);
+      DeviceStore.upsert(map[d.id]!);
       notify();
     }
   }
@@ -540,7 +688,9 @@ class AppState {
     _scanTimer?.cancel();
     _posTimer?.cancel();
     _bannerTimer?.cancel();
+    _houseTimer?.cancel();
     _bleSub?.cancel();
+    _classicBt.stopDiscovery();
     onChanged = null;
   }
 }

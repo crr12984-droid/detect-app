@@ -47,6 +47,7 @@ class Device {
   final DateTime firstSeen;
   DateTime lastSeen;
   int seen;
+  bool stale; // 超时未上报 → 置灰并排至列表末尾
 
   Device({
     required this.kind,
@@ -68,6 +69,7 @@ class Device {
     DateTime? firstSeen,
     DateTime? lastSeen,
     this.seen = 1,
+    this.stale = false,
   })  : firstSeen = firstSeen ?? DateTime.now(),
         lastSeen = lastSeen ?? DateTime.now();
 
@@ -81,6 +83,7 @@ class Device {
           {int? rssi,
           int? seen,
           bool? seized,
+          bool? stale,
           String? name,
           String? model,
           String? brand,
@@ -112,6 +115,7 @@ class Device {
         firstSeen: firstSeen,
         lastSeen: DateTime.now(),
         seen: seen ?? this.seen,
+        stale: stale ?? this.stale,
       );
 
   Map<String, dynamic> toJson() => {
@@ -136,6 +140,7 @@ class Device {
         'firstSeen': firstSeen.toIso8601String(),
         'lastSeen': lastSeen.toIso8601String(),
         'seen': seen,
+        'stale': stale,
       };
 
   factory Device.fromJson(Map<String, dynamic> j) => Device(
@@ -168,6 +173,7 @@ class Device {
         firstSeen: DateTime.parse(j['firstSeen'] as String),
         lastSeen: DateTime.parse(j['lastSeen'] as String),
         seen: (j['seen'] as int?) ?? 1,
+        stale: (j['stale'] as bool?) ?? false,
       );
 }
 

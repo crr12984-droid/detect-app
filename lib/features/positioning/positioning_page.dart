@@ -212,6 +212,7 @@ class PositioningPage extends StatelessWidget {
             ['名称', d.name],
             ['品牌', '${brandLabel(d.brand)}${d.domestic ? '（国产）' : '（进口）'}'],
             ['品类', d.category.isEmpty ? '未知' : d.category],
+            ['类型', radioTypeLabel(d.radioType)],
             ['区域', state.isIndoor(d) ? '室内' : '室外'],
             ['距离', '${d.distance.toStringAsFixed(1)} m'],
             ['发现时间', first],
@@ -335,21 +336,13 @@ class _LocatorPainter extends CustomPainter {
     final rad = dir * pi / 180;
     final ux = cos(rad), uy = sin(rad);
     final ex = c + ux * 86 * scale, ey = c + uy * 86 * scale;
-    final arrowPaint = Paint()
-      ..color = const Color(0xFFCBD5E1)
+    // 方向线：无箭头虚线（对齐原型 .dir-line{stroke-dasharray:6 5}）
+    final dirPaint = Paint()
+      ..color = const Color(0xFFCBD5E1).withOpacity(0.85)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
-    canvas.drawLine(Offset(c, c), Offset(ex, ey), arrowPaint);
-    final ah = 7.0 * scale;
-    final ang = atan2(uy, ux);
-    canvas.drawLine(
-        Offset(ex, ey),
-        Offset(ex - ah * cos(ang - 0.5), ey - ah * sin(ang - 0.5)),
-        arrowPaint);
-    canvas.drawLine(
-        Offset(ex, ey),
-        Offset(ex - ah * cos(ang + 0.5), ey - ah * sin(ang + 0.5)),
-        arrowPaint);
+    _drawDashedLine(
+        canvas, Offset(c, c), Offset(ex, ey), dirPaint, 6 * scale, 5 * scale);
     final rl = _rOf(rssi.toDouble());
     _dot(canvas, c + ux * rl * scale, c + uy * rl * scale, const Color(0xFFFF9F1C));
     final rm = _rOf(maxRssi);
@@ -361,6 +354,22 @@ class _LocatorPainter extends CustomPainter {
     canvas.drawCircle(Offset(x, y), 5.5, glow);
     canvas.drawCircle(Offset(x, y), 5.5,
         Paint()..color = color..style = PaintingStyle.fill);
+  }
+
+  /// 画一条虚线（起点→终点，按 dash/gap 分段）
+  void _drawDashedLine(Canvas canvas, Offset a, Offset b, Paint paint,
+      double dash, double gap) {
+    final dx = b.dx - a.dx, dy = b.dy - a.dy;
+    final len = sqrt(dx * dx + dy * dy);
+    if (len < 1e-3) return;
+    final ux = dx / len, uy = dy / len;
+    var t = 0.0;
+    while (t < len) {
+      final end = (t + dash) < len ? (t + dash) : len;
+      canvas.drawLine(Offset(a.dx + ux * t, a.dy + uy * t),
+          Offset(a.dx + ux * end, a.dy + uy * end), paint);
+      t += dash + gap;
+    }
   }
 
   @override

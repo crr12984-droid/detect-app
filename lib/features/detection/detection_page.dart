@@ -361,13 +361,16 @@ class DetectionPage extends StatelessWidget {
         ? [nameCell, brandCell, typeCell, ZoneTag(indoor), signalCell, distCell, opCell]
         : [nameCell, brandCell, catCell, radioTypeCell, ZoneTag(indoor), signalCell, distCell, opCell];
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: Color(0xFF1B232E)))),
-      child: Row(
-        children: List.generate(cells.length,
-            (i) => Expanded(flex: flex[i], child: cells[i])),
+    return Opacity(
+      opacity: d.stale ? 0.38 : 1.0,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: Color(0xFF1B232E)))),
+        child: Row(
+          children: List.generate(cells.length,
+              (i) => Expanded(flex: flex[i], child: cells[i])),
+        ),
       ),
     );
   }
