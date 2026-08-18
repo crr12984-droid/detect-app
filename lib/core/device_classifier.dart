@@ -156,15 +156,6 @@ int? adTxPower(Map<int, List<int>> ad) {
   return b >= 128 ? b - 256 : b;
 }
 
-/// 由广播 Flags 判定无线电类型：
-/// bit2(BR/EDR Not Supported)=1 → 仅低功耗；清 0 → 双模（支持经典蓝牙）。
-/// flags 为空时默认低功耗（至少经 BLE 发现）。
-RadioType radioTypeFromFlags(int? flags) {
-  if (flags == null) return RadioType.lowEnergy;
-  if ((flags & 0x04) != 0) return RadioType.lowEnergy;
-  return RadioType.dual;
-}
-
 /// 判断是否为「随机/加密广播名」。
 /// 苹果等设备未配对时会把 localName 替换成 base64 随机串（如
 /// "NGMp8n6AJcllMyw6b/bWGxcAI"），真实名要配对后经 GATT 0x2A00 才可得。

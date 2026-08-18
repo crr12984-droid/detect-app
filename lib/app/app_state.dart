@@ -174,11 +174,8 @@ class AppState {
     if (detType == DeviceKind.wifi) {
       _wifiLoop();
     } else {
+      // 型号/名称解析改为「扫描回调里立即触发」（抢 connectable 窗口），不再用定时器批量
       _bleLoop();
-      // 后台并行解析型号/名称（连接读 GATT），不阻塞扫描刷新
-      _modelTimer?.cancel();
-      _modelTimer =
-          Timer.periodic(const Duration(seconds: 4), (_) => _maybeResolveModels());
     }
   }
 
@@ -199,7 +196,6 @@ class AppState {
 
   /// 连续 BLE 扫描（每次超时后自动续扫），通过订阅 scanResults 实时上报周边设备
   StreamSubscription? _bleSub;
-  Timer? _modelTimer; // 后台型号解析定时器（与扫描并行，避免阻塞扫描刷新）
   Future<void> _bleLoop() async {
     if (!scanning || detType != DeviceKind.ble) return;
     if (!(await _ble.supported)) return;
@@ -208,6 +204,8 @@ class AppState {
       if (!scanning || detType != DeviceKind.ble) return;
       ble = _ble.mapResults(list);
       notify();
+      // 收到广播后立即尝试解析型号/名称（抢 connectable 窗口，不等待定时器）
+      _maybeResolveModels();
     });
     while (scanning && detType == DeviceKind.ble) {
       try {
@@ -231,8 +229,6 @@ class AppState {
     scanning = false;
     _scanTimer?.cancel();
     _scanTimer = null;
-    _modelTimer?.cancel();
-    _modelTimer = null;
     try {
       if (FlutterBluePlus.isScanningNow) FlutterBluePlus.stopScan();
     } catch (_) {}
@@ -316,6 +312,8 @@ class AppState {
       final needs =
           d.model == null && (d.brand == 'Apple' || d.brand == '未知' || nameUnknown);
       if (!needs || _modelTried.contains(d.id)) continue;
+      // connectable 过滤：只对当前可连接的设备发起连接，不可连接(随机广播)直接跳过
+      if (!_ble.isConnectable(d.id)) continue;
       if ((_modelFails[d.id] ?? 0) >= 3) continue; // 连续失败 3 次后放弃
       _resolving = true;
       bool ok = false;

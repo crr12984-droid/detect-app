@@ -5,8 +5,8 @@ enum DeviceKind { wifi, ble }
 /// WiFi 设备类型（用于 AP / STA / WiFi Direct 区分与拓扑展示）
 enum WifiType { ap, sta, direct }
 
-/// 蓝牙无线电类型（由广播 Flags 判定：低功耗 / 经典 / 双模）
-enum RadioType { lowEnergy, classic, dual }
+/// 蓝牙无线电类型：低功耗蓝牙(BLE) / 经典蓝牙(BR/EDR)。蓝牙只有这两类，不存在"双模"这一类型。
+enum RadioType { lowEnergy, classic }
 
 /// 无线电类型显示名
 String radioTypeLabel(RadioType t) {
@@ -15,8 +15,6 @@ String radioTypeLabel(RadioType t) {
       return '低功耗蓝牙';
     case RadioType.classic:
       return '经典蓝牙';
-    case RadioType.dual:
-      return '双模蓝牙';
   }
 }
 
@@ -38,7 +36,7 @@ class Device {
   final int rssi; // 实时信号强度 dBm（真实）
   final String? info; // WiFi: 加密方式；BLE: 可选
   final String category; // 路由器 / 手机 / 手表 / 耳机 / 平板 / 车载 / ''未知
-  final RadioType radioType; // 蓝牙类型：低功耗蓝牙 / 经典蓝牙 / 双模蓝牙
+  final RadioType radioType; // 蓝牙类型：低功耗蓝牙 / 经典蓝牙
   bool seized; // 是否被查扣
   final String? model; // 精确型号（名称带出或连接后读 DIS 获得）
   final int? txPower; // 广播 Tx Power Level(dBm)，用于路径损耗测距

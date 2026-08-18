@@ -9,10 +9,16 @@ import 'device_classifier.dart';
 class BleScanner {
   // 缓存 BluetoothDevice，供后续连接读取精确型号（GATT）使用。
   final Map<String, BluetoothDevice> _devices = {};
+  // 最近一轮扫描中每个设备是否处于「可连接(connectable)」状态。
+  // 仅对可连接设备发起 GATT 连接，避免对不可连接(随机广播)设备白等。
+  final Map<String, bool> _connectable = {};
 
   Future<bool> get supported async => FlutterBluePlus.isSupported;
 
   BluetoothDevice? deviceFor(String id) => _devices[id.toUpperCase()];
+
+  /// 设备当前是否可连接（未提供该字段的平台默认视为可尝试）。
+  bool isConnectable(String id) => _connectable[id.toUpperCase()] ?? true;
 
   /// 将一轮扫描结果映射为 Device（识别品牌/类别/型号，并缓存 BluetoothDevice）
   List<Device> mapResults(List<ScanResult> results) {
@@ -20,6 +26,9 @@ class BleScanner {
       final mac = r.device.remoteId.str.toUpperCase();
       _devices[mac] = r.device;
       final adv = r.advertisementData;
+      // 记录 connectable 状态（Android 上由广播包判定；未提供时 null → 默认可尝试）
+      final conn = adv.connectable;
+      if (conn != null) _connectable[mac] = conn;
       final companyId = adv.manufacturerData.isNotEmpty
           ? adv.manufacturerData.keys.first
           : null;
@@ -51,8 +60,8 @@ class BleScanner {
         final ap = appearanceCategory(id.appearance);
         if (ap.isNotEmpty) category = ap;
       }
-      // 无线电类型：低功耗蓝牙 / 双模蓝牙（由 Flags 判定）
-      final radioType = radioTypeFromFlags(id.flags);
+      // 无线电类型：BLE 扫描发现的均为低功耗蓝牙（经典蓝牙需经 BR/EDR discovery 另采）
+      const radioType = RadioType.lowEnergy;
       // 无广播名称时，用「品牌+品类」兜底展示，避免整列“未知设备”
       final name = advName.isNotEmpty
           ? advName
