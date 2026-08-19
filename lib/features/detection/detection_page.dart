@@ -200,8 +200,8 @@ class DetectionPage extends StatelessWidget {
   Widget _group(bool indoor, String title, List<Device> items, bool isWifi,
       BuildContext ctx) {
     final flex = isWifi
-        ? [4, 3, 2, 2, 3, 2, 2]
-        : [4, 3, 2, 2, 2, 3, 2, 2];
+        ? [4, 3, 2, 3, 2, 2]
+        : [4, 3, 2, 2, 3, 2, 2];
     final cells = items.map((d) => _row(flex, d, isWifi, ctx)).toList();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Padding(
@@ -240,16 +240,16 @@ class DetectionPage extends StatelessWidget {
 
   Widget _header(List<int> flex, bool isWifi) {
     final labels = isWifi
-        ? ['名称', '品牌', '类型', '区域', '信号强度', '距离', '']
-        : ['名称', '品牌', '品类', '类型', '区域', '信号强度', '距离', ''];
+        ? ['名称', '品牌', '类型', '信号强度', '距离', '']
+        : ['名称', '品牌', '品类', '类型', '信号强度', '距离', ''];
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: AppColors.line))),
       child: Row(
         children: List.generate(labels.length, (i) {
-          final isSig = isWifi ? i == 4 : i == 5;
-          final isDist = isWifi ? i == 5 : i == 6;
+          final isSig = isWifi ? i == 3 : i == 4;
+          final isDist = isWifi ? i == 4 : i == 5;
           if (!isSig && !isDist) {
             return Expanded(
                 flex: flex[i],
@@ -283,7 +283,6 @@ class DetectionPage extends StatelessWidget {
   }
 
   Widget _row(List<int> flex, Device d, bool isWifi, BuildContext ctx) {
-    final indoor = state.isIndoor(d);
     final nameCell = Row(children: [
       CatIcon(d.category.isEmpty ? '' : d.category),
       const SizedBox(width: 9),
@@ -358,8 +357,8 @@ class DetectionPage extends StatelessWidget {
     ]);
 
     final cells = isWifi
-        ? [nameCell, brandCell, typeCell, ZoneTag(indoor), signalCell, distCell, opCell]
-        : [nameCell, brandCell, catCell, radioTypeCell, ZoneTag(indoor), signalCell, distCell, opCell];
+        ? [nameCell, brandCell, typeCell, signalCell, distCell, opCell]
+        : [nameCell, brandCell, catCell, radioTypeCell, signalCell, distCell, opCell];
 
     return Opacity(
       opacity: d.stale ? 0.38 : 1.0,

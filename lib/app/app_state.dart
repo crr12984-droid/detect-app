@@ -60,6 +60,7 @@ class AppState {
   double maxRssi = -35;
   double dir = 0;
   Timer? _posTimer;
+  Timer? _beepTimer; // 定位追踪嘀嘀声节奏定时器
   int _prevRssi = -100; // 上一次 tick 的信号值，用于信号增强提示音
 
   // 列表排序：信号强度 / 距离，可点击切换升/降序
@@ -284,15 +285,16 @@ class AppState {
   Future<void> _wifiLoop() async {
     while (scanning && detType == DeviceKind.wifi) {
       try {
-        await WifiScanner().start();
-        await Future.delayed(const Duration(milliseconds: 1200));
+        final w = WifiScanner();
+        await w.start();
+        await Future.delayed(const Duration(milliseconds: 600));
         if (!scanning || detType != DeviceKind.wifi) return;
-        final fresh = await WifiScanner().getResults();
+        final fresh = await w.getResults();
         _mergeInto(_wifiMap, fresh);
         notify();
       } catch (_) {}
       await Future.delayed(
-          sentinel ? const Duration(milliseconds: 800) : const Duration(milliseconds: 1800));
+          sentinel ? const Duration(milliseconds: 400) : const Duration(milliseconds: 800));
     }
   }
 
@@ -374,6 +376,10 @@ class AppState {
     _scanTimer = null;
     _houseTimer?.cancel();
     _houseTimer = null;
+    _posTimer?.cancel();
+    _posTimer = null;
+    _beepTimer?.cancel();
+    _beepTimer = null;
     _classicBt.stopDiscovery();
     try {
       if (FlutterBluePlus.isScanningNow) FlutterBluePlus.stopScan();
@@ -399,7 +405,8 @@ class AppState {
   }
   // ---------- 定位 ----------
   Future<void> openPosition(Device d) async {
-    stopScan();
+    // 定位期间保持扫描运行，实时获取目标 RSSI（不停止扫描，否则信号会冻结）
+    if (!scanning) startScan();
     tracked = d;
     maxRssi = d.rssi.toDouble();
     _prevRssi = d.rssi;
@@ -410,24 +417,23 @@ class AppState {
     _posTimer?.cancel();
     _posTimer = Timer.periodic(_posInterval(), (_) => _posTick());
     _posTick();
+    // 嘀嘀声：节奏随信号强度变化（越近越急促）
+    _beepTimer?.cancel();
+    _scheduleBeep();
   }
 
   void _posTick() {
     if (tracked == null) return;
     final list = tracked!.kind == DeviceKind.wifi ? wifi : ble;
-    final f = list.where((x) => x.id == tracked!.id).isNotEmpty
+    final live = list.where((x) => x.id == tracked!.id).isNotEmpty
         ? list.firstWhere((x) => x.id == tracked!.id)
         : null;
-    int nr = f?.rssi ?? tracked!.rssi;
-    // 在真实值基础上做 ±2 抖动，使信号格/趋势保持动态（不累积漂移）
-    nr = (nr + (Random().nextInt(5) - 2)).clamp(-100, -30);
+    // 直接采用实时 RSSI（目标持续发信号即实时刷新），随距离明显变化（近强远弱）
+    final nr = live?.rssi ?? tracked!.rssi;
     tracked = tracked!.copyWith(rssi: nr, seen: tracked!.seen + 1);
     maxRssi = max(maxRssi, nr.toDouble());
-    dir = (dir + (Random().nextDouble() * 10 - 5) + 360) % 360;
     trend.add(nr);
     if (trend.length > 60) trend.removeAt(0);
-    // 声音提示：信号增强（变强 ≥3dBm）时短促提示音，便于靠近目标时定位
-    if (sound && nr - _prevRssi >= 3) _beep(3);
     _prevRssi = nr;
     notify();
   }
@@ -440,6 +446,23 @@ class AppState {
         } catch (_) {}
       });
     }
+  }
+
+  /// 嘀嘀声节奏：信号越强（越近）间隔越短 → 越急促；越弱（越远）间隔越长 → 越慢。
+  int _beepIntervalMs(int rssi) {
+    final t = ((rssi + 100) / 70).clamp(0.0, 1.0); // 0 远 .. 1 近
+    return (1500 - 1300 * t).round(); // 1500ms(远) .. 200ms(近)
+  }
+
+  /// 自我重排的提示音定时器：节奏随当前信号强度变化（越近越急促）。
+  void _scheduleBeep() {
+    if (tracked == null || !scanning) {
+      _beepTimer = null;
+      return;
+    }
+    if (sound && !muted) _beep(1);
+    final nr = tracked!.rssi;
+    _beepTimer = Timer(Duration(milliseconds: _beepIntervalMs(nr)), _scheduleBeep);
   }
 
   // ---------- 精确型号/名称（连接后读 GATT 设备信息服务 0x180A） ----------
@@ -459,8 +482,9 @@ class AppState {
       final needs =
           d.model == null && (d.brand == 'Apple' || d.brand == '未知' || nameUnknown);
       if (!needs || _modelTried.contains(d.id)) continue;
-      // connectable 过滤：只对当前可连接的设备发起连接，不可连接(随机广播)直接跳过
-      if (!_ble.isConnectable(d.id)) continue;
+      // 苹果/未知品牌（含 iOS 随机广播设备）即使广播 connectable=false 也尝试 GATT，
+      // 以读取型号(0x2A24)/厂商名(0x2A29)/PnP(0x2A50) 等协议字段；其余品牌仅在可连接时尝试。
+      if (d.brand != 'Apple' && !_ble.isConnectable(d.id)) continue;
       if ((_modelFails[d.id] ?? 0) >= 3) continue; // 连续失败 3 次后放弃
       _resolving = true;
       bool ok = false;
@@ -575,16 +599,17 @@ class AppState {
   }
 
   void backToList() {
-    _posTimer?.cancel();
-    _posTimer = null;
+    stopPosition();
     overlay = 'detection';
     notify();
-    startScan();
+    if (!scanning) startScan();
   }
 
   void stopPosition() {
     _posTimer?.cancel();
     _posTimer = null;
+    _beepTimer?.cancel();
+    _beepTimer = null;
   }
 
   // ---------- 查扣 ----------
@@ -687,6 +712,7 @@ class AppState {
     _alive = false;
     _scanTimer?.cancel();
     _posTimer?.cancel();
+    _beepTimer?.cancel();
     _bannerTimer?.cancel();
     _houseTimer?.cancel();
     _bleSub?.cancel();

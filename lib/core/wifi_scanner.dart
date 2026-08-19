@@ -3,8 +3,11 @@ import '../../models/device.dart';
 import 'brand_db.dart';
 
 /// 真实 WiFi 扫描：读取周边 AP / 热点（SSID、BSSID、信号、加密）。
-/// 依据 SSID/能力区分 AP 与 WiFi Direct；STA（关联终端）在普通模式下不可见，
-/// 界面与数据模型已支持 STA 类型，如硬件/监听模式可发现 STA 直接填入即可。
+/// 协议字段区分：
+///  - WiFi-Direct 对等端：SSID 含 DIRECT / WIFI_DIRECT → WifiType.direct
+///  - 基础设施 AP：能力串含 [ESS] → WifiType.ap
+///  - STA（关联终端/客户端）：普通安卓权限无法嗅探（需 monitor 监听模式），
+///    数据模型已预留 WifiType.sta，待硬件/监听模式支持时直接填入即可。
 class WifiScanner {
   Future<void> start() async {
     try {
@@ -31,6 +34,8 @@ class WifiScanner {
       final id = ap.bssid.toUpperCase();
       final ssidUp = ap.ssid.toUpperCase();
       final isDirect = ssidUp.contains('DIRECT') || ssidUp.contains('WIFI_DIRECT');
+      // 协议字段（capabilities）含 [ESS] 表示基础设施 AP；DIRECT 表示 WiFi-Direct 对等端。
+      // 普通安卓权限下无法嗅探到 STA（关联终端），其数据模型 WifiType.sta 已预留。
       final type = isDirect ? WifiType.direct : WifiType.ap;
       map[id] = Device(
         kind: DeviceKind.wifi,

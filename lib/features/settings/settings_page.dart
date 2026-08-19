@@ -29,8 +29,8 @@ class SettingsPage extends StatelessWidget {
                 label: '告警阈值',
                 hint: '预计 ${rssiToDistance(state.thresholdDbm).toStringAsFixed(1)} 米',
                 value: state.thresholdDbm.toDouble(),
-                min: -90,
-                max: -40,
+                min: -100,
+                max: 0,
                 step: 1,
                 unit: 'dBm',
                 onChanged: (v) {
@@ -44,8 +44,8 @@ class SettingsPage extends StatelessWidget {
                 label: '室内判定阈值（信号强度）',
                 hint: '预计 ${rssiToDistance(state.indoorThr).toStringAsFixed(1)} 米',
                 value: state.indoorThr.toDouble(),
-                min: -90,
-                max: -30,
+                min: -100,
+                max: 0,
                 step: 1,
                 unit: 'dBm',
                 onChanged: (v) {

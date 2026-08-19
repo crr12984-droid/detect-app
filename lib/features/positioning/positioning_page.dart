@@ -157,12 +157,10 @@ class PositioningPage extends StatelessWidget {
         ),
       );
 
-  /// 8 格信号条（与原型一致：clamp(round((rssi+100)/60*8),0,8)），随信号动态变化
+  /// 8 格信号条（与原型一致：clamp(round((rssi+100)/60*8),0,8)），颜色随信号强度变化
+  /// （底格弱=红 → 顶格强=绿），不再统一黄色。
   Widget _signalMeter(int rssi) {
     final n = ((rssi + 100) / 60 * 8).round().clamp(0, 8);
-    final color = rssi >= state.indoorThr
-        ? const Color(0xFFFACC15)
-        : const Color(0xFF46536A);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(8, (i) {
@@ -172,13 +170,21 @@ class PositioningPage extends StatelessWidget {
           height: 20,
           margin: const EdgeInsets.symmetric(horizontal: 2.5),
           decoration: BoxDecoration(
-            color: on ? color : Colors.transparent,
+            color: on ? _barColor(i) : Colors.transparent,
             border: Border.all(color: const Color(0xFF46536A)),
             borderRadius: BorderRadius.circular(3),
           ),
         );
       }),
     );
+  }
+
+  /// 单格配色：弱(底)红 → 中橙 → 较强黄 → 强(顶)绿，使信号强度一眼可辨
+  Color _barColor(int i) {
+    if (i <= 1) return const Color(0xFFEF4444);
+    if (i <= 3) return const Color(0xFFF59E0B);
+    if (i <= 5) return const Color(0xFFFACC15);
+    return const Color(0xFF4CC079);
   }
 
   Widget _legendDot(Color c, String label) => Row(children: [
@@ -195,6 +201,7 @@ class PositioningPage extends StatelessWidget {
         ? [
             ['名称', d.name],
             ['品牌', brandLabel(d.brand)],
+            ['型号', d.model ?? '—'],
             ['类型', d.wifiType == WifiType.direct
                 ? 'WiFi Direct'
                 : d.wifiType == WifiType.sta
@@ -211,6 +218,7 @@ class PositioningPage extends StatelessWidget {
         : [
             ['名称', d.name],
             ['品牌', '${brandLabel(d.brand)}${d.domestic ? '（国产）' : '（进口）'}'],
+            ['型号', d.model ?? '—'],
             ['品类', d.category.isEmpty ? '未知' : d.category],
             ['类型', radioTypeLabel(d.radioType)],
             ['区域', state.isIndoor(d) ? '室内' : '室外'],
@@ -306,15 +314,15 @@ class _LocatorPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final c = size.width / 2;
     final scale = size.width / 200;
-    final rings = [90.0, 72.0, 54.0, 36.0, 18.0];
-    final labels = [-100, -80, -60, -40, -20];
+    // 强度环：半径严格等于 _rOf(label)，使实时/最大信号点能精确落在对应强度圈上
+    final rings = [-100.0, -80.0, -60.0, -40.0, -20.0];
 
     final ringPaint = Paint()
       ..color = const Color(0x665E8A74)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
-    for (final r in rings) {
-      canvas.drawCircle(Offset(c, c), r * scale, ringPaint);
+    for (final s in rings) {
+      canvas.drawCircle(Offset(c, c), _rOf(s) * scale, ringPaint);
     }
     final axisPaint = Paint()
       ..color = const Color(0x295E8A74)
@@ -323,18 +331,23 @@ class _LocatorPainter extends CustomPainter {
     canvas.drawLine(Offset(c, c - 96 * scale), Offset(c, c + 96 * scale), axisPaint);
     canvas.drawLine(Offset(c - 96 * scale, c), Offset(c + 96 * scale, c), axisPaint);
     final tp = TextPainter(textDirection: TextDirection.ltr);
-    for (var i = 0; i < rings.length; i++) {
+    for (final s in rings) {
       tp.text = TextSpan(
-          text: '${labels[i]}',
+          text: '${s.toInt()}',
           style: const TextStyle(
               fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF6F8D7C)));
       tp.layout();
-      tp.paint(canvas, Offset(c + 3 * scale, c - rings[i] * scale - 4 * scale));
+      tp.paint(canvas, Offset(c + 3 * scale, c - _rOf(s) * scale - 4 * scale));
     }
     canvas.drawCircle(Offset(c, c), 3 * scale,
         Paint()..color = const Color(0xFF5E6977));
-    final rad = dir * pi / 180;
-    final ux = cos(rad), uy = sin(rad);
+    // 方位角：信号越强(正对目标)→上方(-90°)，越弱(背向)→下方(+90°)（虚线原理）
+    double angOf(double s) {
+      final t = ((s + 100) / 70).clamp(0.0, 1.0); // 0 弱(远) .. 1 强(近)
+      return (-90 + (1 - t) * 180) * pi / 180;
+    }
+    final ar = angOf(rssi.toDouble());
+    final ux = cos(ar), uy = sin(ar);
     final ex = c + ux * 86 * scale, ey = c + uy * 86 * scale;
     // 方向线：无箭头虚线（对齐原型 .dir-line{stroke-dasharray:6 5}）
     final dirPaint = Paint()
@@ -345,8 +358,10 @@ class _LocatorPainter extends CustomPainter {
         canvas, Offset(c, c), Offset(ex, ey), dirPaint, 6 * scale, 5 * scale);
     final rl = _rOf(rssi.toDouble());
     _dot(canvas, c + ux * rl * scale, c + uy * rl * scale, const Color(0xFFFF9F1C));
+    final am = angOf(maxRssi);
+    final uxm = cos(am), uym = sin(am);
     final rm = _rOf(maxRssi);
-    _dot(canvas, c + ux * rm * scale, c + uy * rm * scale, const Color(0xFFEF4444));
+    _dot(canvas, c + uxm * rm * scale, c + uym * rm * scale, const Color(0xFFEF4444));
   }
 
   void _dot(Canvas canvas, double x, double y, Color color) {
@@ -414,15 +429,16 @@ class _TrendPainter extends CustomPainter {
       lbl.layout();
       lbl.paint(canvas, Offset(padL - 6 - lbl.width, y - lbl.height / 2));
     }
+    // 纵轴单位 dBm（位于 Y 轴顶部）
+    lbl.text = const TextSpan(
+        text: 'dBm', style: TextStyle(fontSize: 9, color: Color(0xFF5E6977)));
+    lbl.textAlign = TextAlign.left;
+    lbl.layout();
+    lbl.paint(canvas, Offset(6, 4));
+    // 横轴：保留时间窗网格线，但去掉横坐标数值（按需求只显示相对时间窗）
     for (var t = 0; t <= 60; t += 5) {
       final gx = padL + (t / 60) * plotW;
       canvas.drawLine(Offset(gx, padT), Offset(gx, padT + plotH), grid);
-      lbl.text = TextSpan(
-          text: t == 60 ? '60s' : '$t',
-          style: const TextStyle(fontSize: 9, color: Color(0xFF5E6977)));
-      lbl.textAlign = TextAlign.center;
-      lbl.layout();
-      lbl.paint(canvas, Offset(gx - lbl.width / 2, size.height - 16));
     }
 
     final N = data.length;
