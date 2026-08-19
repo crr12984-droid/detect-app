@@ -61,7 +61,6 @@ class AppState {
   double dir = 0;
   Timer? _posTimer;
   Timer? _beepTimer; // 定位追踪嘀嘀声节奏定时器
-  int _prevRssi = -100; // 上一次 tick 的信号值，用于信号增强提示音
 
   // 列表排序：信号强度 / 距离，可点击切换升/降序
   String wifiSortKey = 'rssi';
@@ -409,7 +408,6 @@ class AppState {
     if (!scanning) startScan();
     tracked = d;
     maxRssi = d.rssi.toDouble();
-    _prevRssi = d.rssi;
     dir = (DateTime.now().millisecondsSinceEpoch % 360).toDouble();
     trend = List.generate(60, (_) => d.rssi);
     overlay = 'position';
@@ -434,7 +432,6 @@ class AppState {
     maxRssi = max(maxRssi, nr.toDouble());
     trend.add(nr);
     if (trend.length > 60) trend.removeAt(0);
-    _prevRssi = nr;
     notify();
   }
 
