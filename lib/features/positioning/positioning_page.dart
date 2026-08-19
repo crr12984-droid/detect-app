@@ -157,8 +157,8 @@ class PositioningPage extends StatelessWidget {
         ),
       );
 
-  /// 8 格信号条（与原型一致：clamp(round((rssi+100)/60*8),0,8)），颜色随信号强度变化
-  /// （底格弱=红 → 顶格强=绿），不再统一黄色。
+  /// 8 格信号条（与原型一致：clamp(round((rssi+100)/60*8),0,8)）。
+  /// 统一黄色，填充格数随信号强度变化（强→多格，弱→少格），不按强度分色。
   Widget _signalMeter(int rssi) {
     final n = ((rssi + 100) / 60 * 8).round().clamp(0, 8);
     return Row(
@@ -179,13 +179,8 @@ class PositioningPage extends StatelessWidget {
     );
   }
 
-  /// 单格配色：弱(底)红 → 中橙 → 较强黄 → 强(顶)绿，使信号强度一眼可辨
-  Color _barColor(int i) {
-    if (i <= 1) return const Color(0xFFEF4444);
-    if (i <= 3) return const Color(0xFFF59E0B);
-    if (i <= 5) return const Color(0xFFFACC15);
-    return const Color(0xFF4CC079);
-  }
+  /// 信号格统一黄色，仅填充格数随信号强度变化（强→多格，弱→少格）。
+  Color _barColor(int i) => const Color(0xFFFACC15);
 
   Widget _legendDot(Color c, String label) => Row(children: [
         Container(

@@ -49,8 +49,21 @@ class BleScanner {
           serviceUuids: uuids,
           appearance: appearance,
           txPower: txPower);
-      // 名称/服务未给出品类时，用广播 Appearance(0x19) 补强（免连接即得）
+      // 苹果设备：从未配对广播的连续性数据做最佳努力类型识别
+      // （iOS 不向未配对扫描器暴露 GATT 设备信息服务，故具体型号需靠此推断）
       String category = id.category;
+      String? model = id.model;
+      if (id.brand == 'Apple') {
+        final mfr = adv.manufacturerData[0x004C];
+        if (mfr != null) {
+          final ai = appleDeviceInfo(mfr.toList());
+          if (ai != null) {
+            if (category.isEmpty) category = ai['category']!;
+            model ??= ai['model'];
+          }
+        }
+      }
+      // 名称/服务未给出品类时，用广播 Appearance(0x19) 补强（免连接即得）
       if (category.isEmpty && id.appearance != null) {
         final ap = appearanceCategory(id.appearance);
         if (ap.isNotEmpty) category = ap;
@@ -73,7 +86,7 @@ class BleScanner {
         category: category,
         radioType: radioType,
         txPower: id.txPower,
-        model: id.model,
+        model: model,
         seized: false,
       );
     }).toList();

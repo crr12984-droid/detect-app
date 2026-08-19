@@ -286,14 +286,14 @@ class AppState {
       try {
         final w = WifiScanner();
         await w.start();
-        await Future.delayed(const Duration(milliseconds: 600));
+        await Future.delayed(const Duration(milliseconds: 500));
         if (!scanning || detType != DeviceKind.wifi) return;
         final fresh = await w.getResults();
         _mergeInto(_wifiMap, fresh);
         notify();
       } catch (_) {}
       await Future.delayed(
-          sentinel ? const Duration(milliseconds: 400) : const Duration(milliseconds: 800));
+          sentinel ? const Duration(milliseconds: 300) : const Duration(milliseconds: 500));
     }
   }
 

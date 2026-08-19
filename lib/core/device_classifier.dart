@@ -141,6 +141,42 @@ String appleMarketingName(String modelId) {
   return map[modelId] ?? modelId;
 }
 
+/// 解析 Apple 连续性广播（Company ID 0x004C 之后的数据）做**最佳努力**的设备类型识别。
+/// 说明：iOS 不向未配对扫描器暴露 GATT 设备信息服务(0x180A)，故具体型号
+/// （如 iPhone 15 Pro）无法通过广播或连接获得；这里仅依据广播类型字节推断大类。
+/// 返回 {category, model} 或 null（无法推断时）。属于启发式，结果仅供展示。
+Map<String, String>? appleDeviceInfo(List<int> data) {
+  if (data.isEmpty) return null;
+  final type = data[0];
+  // AirPods 家族：广播类型 0x07（及部分 0x05/0x09）专门标识 AirPods。
+  if (type == 0x07 || type == 0x05 || type == 0x09) {
+    return {'category': '耳机', 'model': 'AirPods'};
+  }
+  // Nearby / Handoff：0x10 / 0x12，状态字节(索引 2)低 4 位为设备类（最佳努力）。
+  if (type == 0x10 || type == 0x12) {
+    if (data.length > 2) {
+      final cls = data[2] & 0x0F;
+      switch (cls) {
+        case 0x1:
+          return {'category': '手机', 'model': 'iPhone'};
+        case 0x2:
+          return {'category': '平板', 'model': 'iPad'};
+        case 0x3:
+          return {'category': '手表', 'model': 'Apple Watch'};
+        case 0x5:
+          return {'category': '笔电', 'model': 'Mac'};
+        case 0x6:
+          return {'category': '电视', 'model': 'Apple TV'};
+        case 0xA:
+          return {'category': '音箱', 'model': 'HomePod'};
+      }
+    }
+    // Nearby 多为手机类，给一个保守兜底（不臆测具体型号）
+    return {'category': '手机', 'model': 'iPhone'};
+  }
+  return null;
+}
+
 /// GATT Appearance(0x2A01) 16-bit 值 → 品类（对齐报告表1）。
 /// 结构：低 6 位为子类型，高 10 位为类别。按类别段判定：
 /// 手机 0x0040-、电脑 0x0080-、手表 0x00C0-、HID 外设 0x03C0-、音频 0x0440-。
